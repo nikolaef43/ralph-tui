@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * ABOUTME: CLI entry point for the Ralph TUI application.
  * Handles subcommands (plugins, run, etc.) and launches the TUI when no subcommand given.
