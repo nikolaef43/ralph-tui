@@ -69,6 +69,8 @@ export const statusIndicators = {
   blocked: '⊘',
   closed: '✓', // Same indicator as done, but will be greyed out
   running: '▶',
+  selecting: '◐', // Selecting next task - half-filled circle (animated feel)
+  executing: '⏵', // Executing agent - play with bar
   pausing: '◎',
   paused: '⏸',
   stopped: '■',
@@ -137,7 +139,9 @@ export const layout = {
 /**
  * Ralph status types
  * - 'ready': Waiting for user to start execution (interactive mode)
- * - 'running': Actively executing iterations
+ * - 'running': Actively executing iterations (generic running state)
+ * - 'selecting': Selecting next task to work on
+ * - 'executing': Executing agent on current task
  * - 'pausing': Pause requested, waiting for current iteration to complete
  * - 'paused': Paused, waiting to resume
  * - 'stopped': Not running (generic)
@@ -145,7 +149,7 @@ export const layout = {
  * - 'idle': Stopped, no more tasks available
  * - 'error': Stopped due to error
  */
-export type RalphStatus = 'ready' | 'running' | 'pausing' | 'paused' | 'stopped' | 'complete' | 'idle' | 'error';
+export type RalphStatus = 'ready' | 'running' | 'selecting' | 'executing' | 'pausing' | 'paused' | 'stopped' | 'complete' | 'idle' | 'error';
 
 /**
  * Task status types matching the acceptance criteria

@@ -215,6 +215,9 @@ export function RunApp({
   const [showHelp, setShowHelp] = useState(false);
   // Show/hide closed tasks filter (default: show closed tasks)
   const [showClosedTasks, setShowClosedTasks] = useState(true);
+  // Current task info for status display
+  const [currentTaskId, setCurrentTaskId] = useState<string | undefined>(undefined);
+  const [currentTaskTitle, setCurrentTaskTitle] = useState<string | undefined>(undefined);
 
   // Filter and sort tasks for display
   // Sort order: active → actionable → blocked → done → closed
@@ -250,7 +253,8 @@ export function RunApp({
     const unsubscribe = engine.on((event: EngineEvent) => {
       switch (event.type) {
         case 'engine:started':
-          setStatus('running');
+          // Engine starting means we're about to select a task
+          setStatus('selecting');
           // Initialize task list from engine with proper status mapping
           // Uses convertTasksWithDependencyStatus to determine actionable/blocked
           if (event.tasks && event.tasks.length > 0) {
@@ -260,6 +264,9 @@ export function RunApp({
 
         case 'engine:stopped':
           // Map stop reason to appropriate TUI status for display
+          // Clear current task info since we're not executing anymore
+          setCurrentTaskId(undefined);
+          setCurrentTaskTitle(undefined);
           if (event.reason === 'error') {
             setStatus('error');
           } else if (event.reason === 'completed') {
@@ -276,12 +283,24 @@ export function RunApp({
           break;
 
         case 'engine:resumed':
-          setStatus('running');
+          // When resuming, set to selecting until task:selected
+          setStatus('selecting');
+          break;
+
+        case 'task:selected':
+          // Task has been selected, now we're about to execute
+          setCurrentTaskId(event.task.id);
+          setCurrentTaskTitle(event.task.title);
+          setStatus('executing');
           break;
 
         case 'iteration:started':
           setCurrentIteration(event.iteration);
           setCurrentOutput('');
+          // Set current task info for display
+          setCurrentTaskId(event.task.id);
+          setCurrentTaskTitle(event.task.title);
+          setStatus('executing');
           // Update task list to show current task as active
           setTasks((prev) =>
             prev.map((t) =>
@@ -301,6 +320,10 @@ export function RunApp({
         case 'iteration:completed':
           // Increment completed iterations for ETA calculation
           setCompletedIterations((prev) => prev + 1);
+          // Clear current task info and transition back to selecting
+          setCurrentTaskId(undefined);
+          setCurrentTaskTitle(undefined);
+          setStatus('selecting');
           if (event.result.taskCompleted) {
             setTasks((prev) =>
               prev.map((t) =>
@@ -452,16 +475,16 @@ export function RunApp({
 
         case 'p':
           // Toggle pause/resume
-          // When running, pause will transition to pausing, then to paused
+          // When running/executing/selecting, pause will transition to pausing, then to paused
           // When pausing, pressing p again will cancel the pause request
-          // When paused, resume will transition back to running
-          if (status === 'running') {
+          // When paused, resume will transition back to selecting
+          if (status === 'running' || status === 'executing' || status === 'selecting') {
             engine.pause();
             setStatus('pausing');
           } else if (status === 'pausing') {
             // Cancel pause request
             engine.resume();
-            setStatus('running');
+            setStatus('selecting');
           } else if (status === 'paused') {
             engine.resume();
             // Status will update via engine event
@@ -578,6 +601,9 @@ export function RunApp({
         epicName={epicName}
         elapsedTime={elapsedTime}
         trackerName={trackerName || 'beads'}
+        currentTaskId={currentTaskId}
+        currentTaskTitle={currentTaskTitle}
+        currentIteration={currentIteration}
       />
 
       {/* Progress Dashboard - toggleable with 'd' key */}
@@ -593,6 +619,8 @@ export function RunApp({
           trackerName={trackerName || 'beads'}
           epicName={epicName}
           completedIterations={completedIterations}
+          currentTaskId={currentTaskId}
+          currentTaskTitle={currentTaskTitle}
         />
       )}
 

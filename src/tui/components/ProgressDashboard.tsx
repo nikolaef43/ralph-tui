@@ -1,7 +1,7 @@
 /**
  * ABOUTME: Progress Dashboard component for the Ralph TUI.
  * Displays overall progress, time estimates, and execution status.
- * Auto-updates every second when running.
+ * Shows detailed activity information to make engine state clear.
  */
 
 import type { ReactNode } from 'react';
@@ -31,29 +31,51 @@ export interface ProgressDashboardProps {
   epicName?: string;
   /** Number of completed iterations for ETA calculation */
   completedIterations?: number;
+  /** Current task ID being worked on (if any) */
+  currentTaskId?: string;
+  /** Current task title being worked on (if any) */
+  currentTaskTitle?: string;
 }
 
 /**
- * Get status display configuration
+ * Truncate text to fit within a given width, adding ellipsis if needed
  */
-function getStatusDisplay(status: RalphStatus): { label: string; color: string; indicator: string } {
+function truncateText(text: string, maxWidth: number): string {
+  if (text.length <= maxWidth) return text;
+  if (maxWidth <= 3) return text.slice(0, maxWidth);
+  return text.slice(0, maxWidth - 1) + '…';
+}
+
+/**
+ * Get status display configuration with detailed activity info
+ */
+function getStatusDisplay(
+  status: RalphStatus,
+  currentTaskId?: string
+): { label: string; color: string; indicator: string } {
   switch (status) {
     case 'ready':
       return { label: 'Ready - Press Enter or s to start', color: colors.status.info, indicator: statusIndicators.ready };
     case 'running':
       return { label: 'Running', color: colors.status.success, indicator: statusIndicators.running };
+    case 'selecting':
+      return { label: 'Selecting next task...', color: colors.status.info, indicator: statusIndicators.selecting };
+    case 'executing': {
+      const taskLabel = currentTaskId ? ` (${currentTaskId})` : '';
+      return { label: `Agent running${taskLabel}`, color: colors.status.success, indicator: statusIndicators.executing };
+    }
     case 'pausing':
       return { label: 'Pausing after current iteration...', color: colors.status.warning, indicator: statusIndicators.pausing };
     case 'paused':
-      return { label: 'Paused', color: colors.status.warning, indicator: statusIndicators.paused };
+      return { label: 'Paused - Press p to resume', color: colors.status.warning, indicator: statusIndicators.paused };
     case 'stopped':
       return { label: 'Stopped', color: colors.fg.muted, indicator: statusIndicators.stopped };
     case 'complete':
-      return { label: 'All Tasks Complete', color: colors.status.success, indicator: statusIndicators.complete };
+      return { label: 'All tasks complete!', color: colors.status.success, indicator: statusIndicators.complete };
     case 'idle':
-      return { label: 'No More Tasks', color: colors.fg.muted, indicator: statusIndicators.idle };
+      return { label: 'No more tasks available', color: colors.fg.muted, indicator: statusIndicators.idle };
     case 'error':
-      return { label: 'Failed', color: colors.status.error, indicator: statusIndicators.blocked };
+      return { label: 'Failed - Check logs for details', color: colors.status.error, indicator: statusIndicators.blocked };
   }
 }
 
@@ -121,7 +143,8 @@ function ProgressBar({
 }
 
 /**
- * Progress Dashboard component showing comprehensive execution status
+ * Progress Dashboard component showing comprehensive execution status.
+ * Provides clear visibility into what the engine is doing at any moment.
  */
 export function ProgressDashboard({
   status,
@@ -134,10 +157,17 @@ export function ProgressDashboard({
   trackerName,
   epicName,
   completedIterations = 0,
+  currentTaskId,
+  currentTaskTitle,
 }: ProgressDashboardProps): ReactNode {
-  const statusDisplay = getStatusDisplay(status);
+  const statusDisplay = getStatusDisplay(status, currentTaskId);
   const eta = calculateETA(elapsedTimeSeconds, completedIterations, maxIterations, currentIteration);
   const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Show current task title when executing
+  const taskDisplay = currentTaskTitle && (status === 'executing' || status === 'running')
+    ? truncateText(currentTaskTitle, 50)
+    : null;
 
   return (
     <box
@@ -153,7 +183,7 @@ export function ProgressDashboard({
     >
       {/* Top row: Status and Epic name */}
       <box style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <box style={{ flexDirection: 'row', gap: 2 }}>
+        <box style={{ flexDirection: 'row', gap: 2, flexShrink: 1 }}>
           <text>
             <span fg={statusDisplay.color}>{statusDisplay.indicator}</span>
             <span fg={statusDisplay.color}> {statusDisplay.label}</span>
@@ -170,6 +200,16 @@ export function ProgressDashboard({
           <text fg={colors.accent.tertiary}>{trackerName}</text>
         </box>
       </box>
+
+      {/* Current task info row - only shown when executing */}
+      {taskDisplay && (
+        <box style={{ flexDirection: 'row', gap: 1 }}>
+          <text fg={colors.fg.muted}>Working on:</text>
+          <text fg={colors.accent.tertiary}>{currentTaskId}</text>
+          <text fg={colors.fg.secondary}>-</text>
+          <text fg={colors.fg.primary}>{taskDisplay}</text>
+        </box>
+      )}
 
       {/* Progress bars row */}
       <box style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 2 }}>
@@ -200,7 +240,7 @@ export function ProgressDashboard({
           ⏱ Elapsed: <span fg={colors.fg.primary}>{formatElapsedTime(elapsedTimeSeconds)}</span>
         </text>
         <text fg={colors.fg.secondary}>
-          ⏳ ETA: <span fg={status === 'running' ? colors.accent.primary : colors.fg.muted}>{eta}</span>
+          ⏳ ETA: <span fg={status === 'running' || status === 'executing' ? colors.accent.primary : colors.fg.muted}>{eta}</span>
         </text>
         <text fg={colors.fg.muted}>
           {taskProgress}% complete

@@ -75,6 +75,12 @@ export interface HeaderProps {
   elapsedTime: number;
   /** Name of the tracker being used (e.g., 'beads', 'jira') */
   trackerName: string;
+  /** Current task ID being worked on (if any) */
+  currentTaskId?: string;
+  /** Current task title being worked on (if any) */
+  currentTaskTitle?: string;
+  /** Current iteration number (if running) */
+  currentIteration?: number;
 }
 
 /**
