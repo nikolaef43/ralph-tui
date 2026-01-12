@@ -1,18 +1,15 @@
 /**
  * ABOUTME: Create-PRD command for ralph-tui.
  * Uses AI-powered conversation to create Product Requirements Documents.
- * After PRD creation, offers to create tracker tasks automatically.
+ * After PRD generation, shows split view with PRD preview and tracker options.
  */
 
 import { createCliRenderer } from '@opentui/core';
 import { createRoot } from '@opentui/react';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { PrdChatApp } from '../tui/components/PrdChatApp.js';
 import { loadStoredConfig, requireSetup } from '../config/index.js';
 import { getAgentRegistry } from '../plugins/agents/registry.js';
 import { registerBuiltinAgents } from '../plugins/agents/builtin/index.js';
-import { promptSelect } from '../setup/prompts.js';
 import type { AgentPlugin, AgentPluginConfig } from '../plugins/agents/types.js';
 
 /**
@@ -155,128 +152,6 @@ async function getAgent(agentName?: string): Promise<AgentPlugin | null> {
 }
 
 /**
- * Available tracker options for task creation.
- */
-interface TrackerOption {
-  key: string;
-  name: string;
-  description: string;
-  available: boolean;
-  skillPrompt: string;
-}
-
-/**
- * Detect available trackers and return options.
- */
-function getAvailableTrackers(cwd: string): TrackerOption[] {
-  const beadsDir = path.join(cwd, '.beads');
-  const hasBeads = fs.existsSync(beadsDir);
-
-  return [
-    {
-      key: 'A',
-      name: 'JSON (prd.json)',
-      description: 'Simple JSON format, no external dependencies',
-      available: true, // Always available
-      skillPrompt: 'Convert this PRD to prd.json format using the ralph-tui-create-json skill.',
-    },
-    {
-      key: 'B',
-      name: 'Beads',
-      description: 'Git-backed issue tracker with dependencies',
-      available: hasBeads,
-      skillPrompt: 'Convert this PRD to beads using the ralph-tui-create-beads skill.',
-    },
-    {
-      key: 'C',
-      name: 'Skip',
-      description: "I'll create tasks manually",
-      available: true,
-      skillPrompt: '',
-    },
-  ];
-}
-
-/**
- * Prompt user to select a tracker for task creation.
- * Uses the shared promptSelect utility for consistent terminal handling.
- */
-async function promptTrackerSelection(cwd: string): Promise<TrackerOption | null> {
-  const trackers = getAvailableTrackers(cwd);
-  const availableTrackers = trackers.filter((t) => t.available);
-
-  // Small delay to allow terminal to fully restore after TUI cleanup
-  await new Promise((r) => setTimeout(r, 100));
-
-  // Build choices for promptSelect
-  const choices = availableTrackers.map((t) => ({
-    value: t.key,
-    label: t.name,
-    description: t.description,
-  }));
-
-  try {
-    const selected = await promptSelect(
-      'Would you like to create tasks for a tracker?',
-      choices,
-      { default: 'C' } // Default to skip
-    );
-
-    const tracker = availableTrackers.find((t) => t.key === selected);
-    if (!tracker || tracker.key === 'C') {
-      return null;
-    }
-    return tracker;
-  } catch (err) {
-    // Handle any readline errors gracefully
-    console.error('Input error:', err instanceof Error ? err.message : err);
-    return null;
-  }
-}
-
-/**
- * Run the agent with a skill to convert PRD to tracker tasks.
- */
-async function runTrackerConversion(
-  agent: AgentPlugin,
-  prdPath: string,
-  tracker: TrackerOption,
-  cwd: string
-): Promise<boolean> {
-  console.log('');
-  console.log(`Converting PRD to ${tracker.name} format...`);
-  console.log('');
-
-  // Build the prompt with the skill instruction and PRD path
-  const prompt = `${tracker.skillPrompt}
-
-The PRD file is at: ${prdPath}
-
-Read the PRD and create the appropriate tasks.`;
-
-  try {
-    // Execute the agent with the conversion prompt
-    const handle = agent.execute(prompt, [], { cwd });
-    const result = await handle.promise;
-
-    // Check if it succeeded
-    if (result.status === 'completed' && result.exitCode === 0) {
-      console.log('');
-      console.log(`Tasks created successfully!`);
-      return true;
-    } else {
-      console.error('');
-      console.error('Task creation failed:', result.error || `Exit code: ${result.exitCode}`);
-      return false;
-    }
-  } catch (error) {
-    console.error('');
-    console.error('Error running conversion:', error instanceof Error ? error.message : error);
-    return false;
-  }
-}
-
-/**
  * Run the AI-powered chat mode for PRD creation.
  */
 async function runChatMode(parsedArgs: CreatePrdArgs): Promise<void> {
@@ -304,16 +179,12 @@ async function runChatMode(parsedArgs: CreatePrdArgs): Promise<void> {
 
   const root = createRoot(renderer);
 
-  // Store PRD path for post-completion tracker selection
-  let completedPrdPath: string | null = null;
-
   await new Promise<void>((resolve) => {
     const handleComplete = (prdPath: string, _featureName: string) => {
       root.unmount();
       renderer.destroy();
       console.log('');
-      console.log(`PRD created: ${prdPath}`);
-      completedPrdPath = prdPath;
+      console.log(`PRD workflow complete: ${prdPath}`);
       resolve();
     };
 
@@ -341,21 +212,6 @@ async function runChatMode(parsedArgs: CreatePrdArgs): Promise<void> {
       />
     );
   });
-
-  // If PRD was created successfully, offer to create tracker tasks
-  if (completedPrdPath) {
-    const selectedTracker = await promptTrackerSelection(cwd);
-
-    if (selectedTracker) {
-      await runTrackerConversion(agent, completedPrdPath, selectedTracker, cwd);
-    } else {
-      console.log('');
-      console.log('Next steps:');
-      console.log(`  1. Review the PRD: ${completedPrdPath}`);
-      console.log('  2. Convert to tasks: ralph-tui convert --to json ' + completedPrdPath);
-      console.log('  3. Or run with beads: ralph-tui run --epic <epic-id>');
-    }
-  }
 }
 
 /**
