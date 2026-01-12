@@ -221,7 +221,7 @@ The AI will ask about:
 - **Feature goal**: What problem does this solve?
 - **Target users**: Who will use this feature?
 - **Scope**: What should it include/exclude?
-- **Quality gates**: What commands must pass? (pnpm typecheck, npm run lint, etc.)
+- **Quality gates**: What commands must pass? (bun run typecheck, bun run lint, etc.)
 
 Output: `./tasks/prd-<feature-name>.md`
 
@@ -272,8 +272,8 @@ PRDs should include a **Quality Gates** section that specifies project-specific 
 ## Quality Gates
 
 These commands must pass for every user story:
-- `pnpm typecheck` - Type checking
-- `pnpm lint` - Linting
+- `bun run typecheck` - Type checking
+- `bun run lint` - Linting
 
 For UI stories, also include:
 - Verify in browser using dev-browser skill
@@ -517,8 +517,8 @@ Always specify what commands must pass:
 ## Quality Gates
 
 These commands must pass for every user story:
-- `pnpm typecheck` - Type checking
-- `pnpm lint` - Linting
+- `bun run typecheck` - Type checking
+- `bun run lint` - Linting
 ```
 
 ### 5. Start with Small Iterations
@@ -664,20 +664,20 @@ ralph-tui status --json
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/ralph-tui.git
+git clone https://github.com/subsy/ralph-tui.git
 cd ralph-tui
 
 # Install dependencies
-pnpm install
+bun install
 
 # Run in development mode
 bun run ./src/cli.tsx
 
 # Type check
-pnpm typecheck
+bun run typecheck
 
 # Lint
-pnpm lint
+bun run lint
 ```
 
 ### Project Structure

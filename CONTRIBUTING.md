@@ -6,41 +6,40 @@ Thank you for your interest in contributing to Ralph TUI! This document provides
 
 ### Prerequisites
 
-- **Bun** >= 1.0.0 (required for OpenTUI)
-- **pnpm** for package management
+- **Bun** >= 1.0.0 (runtime and package manager)
 - **Git** for version control
 
 ### Development Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/ralph-tui.git
+git clone https://github.com/subsy/ralph-tui.git
 cd ralph-tui
 
 # Install dependencies
-pnpm install
+bun install
 
 # Run the TUI in development mode
 bun run ./src/cli.tsx
 
 # Or use the dev script
-pnpm dev
+bun run dev
 ```
 
 ### Running Quality Checks
 
 ```bash
 # Type checking
-pnpm typecheck
+bun run typecheck
 
 # Linting
-pnpm lint
+bun run lint
 
 # Fix lint issues automatically
-pnpm lint:fix
+bun run lint:fix
 
 # Build the project
-pnpm build
+bun run build
 ```
 
 ## Code Style
@@ -108,7 +107,7 @@ src/
 
 1. **Create a branch** from `main`
 2. **Make your changes** following the code style guidelines
-3. **Run quality checks**: `pnpm typecheck && pnpm lint`
+3. **Run quality checks**: `bun run typecheck && bun run lint`
 4. **Test your changes** manually with `bun run ./src/cli.tsx`
 5. **Commit** with a descriptive message
 6. **Open a pull request**

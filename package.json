@@ -22,7 +22,7 @@
     "lint:fix": "eslint src/ --fix",
     "clean": "rm -rf dist",
     "dev": "bun run ./src/cli.tsx",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "bun run build"
   },
   "files": [
     "dist"
@@ -35,9 +35,17 @@
     "terminal",
     "cli"
   ],
-  "author": "",
+  "author": "subsy",
   "license": "MIT",
-  "packageManager": "pnpm@10.28.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/subsy/ralph-tui.git"
+  },
+  "homepage": "https://github.com/subsy/ralph-tui",
+  "bugs": {
+    "url": "https://github.com/subsy/ralph-tui/issues"
+  },
+  "packageManager": "bun@1.2.17",
   "engines": {
     "bun": ">=1.0.0"
   },
