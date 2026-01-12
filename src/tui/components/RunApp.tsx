@@ -257,6 +257,8 @@ export function RunApp({
   const [showHelp, setShowHelp] = useState(false);
   // Settings view state
   const [showSettings, setShowSettings] = useState(false);
+  // Quit confirmation dialog state
+  const [showQuitDialog, setShowQuitDialog] = useState(false);
   // Show/hide closed tasks filter (default: show closed tasks)
   const [showClosedTasks, setShowClosedTasks] = useState(true);
   // Cache for historical iteration output loaded from disk (taskId -> { output, timing })
@@ -540,6 +542,21 @@ export function RunApp({
         return; // Don't process other keys when dialog is showing
       }
 
+      // When quit dialog is showing, handle y/n/Esc
+      if (showQuitDialog) {
+        switch (key.name) {
+          case 'y':
+            setShowQuitDialog(false);
+            onQuit?.();
+            break;
+          case 'n':
+          case 'escape':
+            setShowQuitDialog(false);
+            break;
+        }
+        return; // Don't process other keys when dialog is showing
+      }
+
       // When help overlay is showing, ? or Esc closes it
       if (showHelp) {
         if (key.name === '?' || key.name === 'escape') {
@@ -562,8 +579,8 @@ export function RunApp({
 
       switch (key.name) {
         case 'q':
-          // Quit the application
-          onQuit?.();
+          // Show quit confirmation dialog
+          setShowQuitDialog(true);
           break;
 
         case 'escape':
@@ -572,7 +589,8 @@ export function RunApp({
             setViewMode('iterations');
             setDetailIteration(null);
           } else {
-            onQuit?.();
+            // Show quit confirmation dialog
+            setShowQuitDialog(true);
           }
           break;
 
@@ -731,7 +749,7 @@ export function RunApp({
           break;
       }
     },
-    [displayedTasks, selectedIndex, status, engine, onQuit, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange]
+    [displayedTasks, selectedIndex, status, engine, onQuit, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showQuitDialog, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange]
   );
 
   useKeyboard(handleKeyboard);
@@ -1056,6 +1074,14 @@ export function RunApp({
         title="⚠ Interrupt Ralph?"
         message="Current iteration will be terminated."
         hint="[y] Yes  [n/Esc] No  [Ctrl+C] Force quit"
+      />
+
+      {/* Quit Confirmation Dialog */}
+      <ConfirmationDialog
+        visible={showQuitDialog}
+        title="Quit Ralph?"
+        message="Session will be saved and can be resumed later."
+        hint="[y] Yes  [n/Esc] Cancel"
       />
 
       {/* Help Overlay */}
