@@ -27,6 +27,7 @@ ralph-tui prime    # Same as create-prd
 |--------|-------------|
 | `--chat`, `--ai` | Use AI-powered chat mode (recommended) |
 | `--agent <name>` | Override agent for chat mode |
+| `--prd-skill <name>` | Use custom PRD skill from `skills_dir` |
 | `--output, -o <dir>` | Output directory for PRD files (default: `./tasks`) |
 | `--stories, -n <count>` | Number of user stories (template mode only) |
 | `--force, -f` | Overwrite existing files |
@@ -62,6 +63,17 @@ ralph-tui create-prd --chat --output ./docs/prds
 # Overwrite existing PRD
 ralph-tui create-prd --chat --force
 ```
+
+### Custom PRD Skill
+
+Use a custom PRD skill from your configured `skills_dir`:
+
+```bash
+# Requires skills_dir in your config file
+ralph-tui create-prd --chat --prd-skill my-custom-skill
+```
+
+See [Configuration](/docs/configuration/options) for how to set `skills_dir`.
 
 ## Chat Mode Workflow
 

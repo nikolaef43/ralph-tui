@@ -26,6 +26,7 @@ These control basic execution behavior.
 | `autoCommit` | boolean | `false` | Auto-commit after each completed task |
 | `prompt_template` | string | - | Custom Handlebars template path |
 | `subagentTracingDetail` | string | `"off"` | Subagent visibility level |
+| `skills_dir` | string | - | Directory containing custom PRD skills |
 
 ### subagentTracingDetail Values
 
@@ -227,6 +228,37 @@ sound = "off"
 | `"off"` | No sound |
 | `"system"` | Use OS default notification sound |
 | `"ralph"` | Play random Ralph Wiggum sound clips |
+
+## Custom Skills Directory
+
+Configure a `skills_dir` to use custom PRD skills with the `--prd-skill` flag:
+
+```toml
+skills_dir = "/path/to/my-skills"
+```
+
+### Skills Directory Structure
+
+Skills must be folders inside `skills_dir` containing a `SKILL.md` file:
+
+```
+my-skills/
+├── custom-prd-skill/
+│   └── SKILL.md
+├── another-skill/
+│   └── SKILL.md
+```
+
+### Using Custom Skills
+
+```bash
+# Use a custom skill with create-prd
+ralph-tui create-prd --chat --prd-skill custom-prd-skill
+```
+
+<Callout type="warning">
+Using `--prd-skill` requires `skills_dir` to be set in your config file. The command will fail with a clear error if `skills_dir` is not configured.
+</Callout>
 
 ## CLI Flag Reference
 
