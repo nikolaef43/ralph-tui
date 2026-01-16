@@ -548,6 +548,81 @@ export class BeadsTrackerPlugin extends BaseTrackerPlugin {
   }
 
   /**
+   * Get the next task to work on using bd ready.
+   * Overrides base implementation to leverage bd's server-side dependency filtering,
+   * since bd list --json doesn't include dependency data needed for client-side filtering.
+   * See: https://github.com/subsy/ralph-tui/issues/97
+   */
+  override async getNextTask(filter?: TaskFilter): Promise<TrackerTask | undefined> {
+    // Build bd ready command args
+    const args = ['ready', '--json'];
+
+    // Apply limit - we only need the first task, but get a few for in_progress preference
+    args.push('--limit', '10');
+
+    // Filter by parent (epic)
+    if (filter?.parentId) {
+      args.push('--parent', filter.parentId);
+    } else if (this.epicId) {
+      args.push('--parent', this.epicId);
+    }
+
+    // Filter by labels
+    const labelsToFilter =
+      filter?.labels && filter.labels.length > 0 ? filter.labels : this.labels;
+    if (labelsToFilter.length > 0) {
+      args.push('--label', labelsToFilter.join(','));
+    }
+
+    // Filter by priority
+    if (filter?.priority !== undefined) {
+      const priorities = Array.isArray(filter.priority)
+        ? filter.priority
+        : [filter.priority];
+      // bd ready only supports single priority, use highest (lowest number)
+      const highestPriority = Math.min(...priorities);
+      args.push('--priority', String(highestPriority));
+    }
+
+    // Filter by assignee
+    if (filter?.assignee) {
+      args.push('--assignee', filter.assignee);
+    }
+
+    const { stdout, exitCode, stderr } = await execBd(args, this.workingDir);
+
+    if (exitCode !== 0) {
+      console.error('bd ready failed:', stderr);
+      return undefined;
+    }
+
+    // Parse JSON output
+    let beads: BeadJson[];
+    try {
+      beads = JSON.parse(stdout) as BeadJson[];
+    } catch (err) {
+      console.error('Failed to parse bd ready output:', err);
+      return undefined;
+    }
+
+    if (beads.length === 0) {
+      return undefined;
+    }
+
+    // Convert to TrackerTask
+    const tasks = beads.map(beadToTask);
+
+    // Prefer in_progress tasks over open tasks (same as base implementation)
+    const inProgress = tasks.find((t) => t.status === 'in_progress');
+    if (inProgress) {
+      return inProgress;
+    }
+
+    // Return the first ready task (bd ready already sorted by priority/hybrid)
+    return tasks[0];
+  }
+
+  /**
    * Set the epic ID for filtering tasks.
    * Used when user selects an epic from the TUI.
    */
