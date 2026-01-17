@@ -156,7 +156,10 @@ export class OpenCodeAgentPlugin extends BaseAgentPlugin {
       this.model = config.model;
     }
 
-    if (typeof config.variant === 'string' && config.variant.length > 0) {
+    if (
+      typeof config.variant === 'string' &&
+      ['minimal', 'high', 'max'].includes(config.variant)
+    ) {
       this.variant = config.variant;
     }
 
@@ -433,6 +436,16 @@ export class OpenCodeAgentPlugin extends BaseAgentPlugin {
       !['general', 'build', 'plan'].includes(String(agent))
     ) {
       return 'Invalid agent type. Must be one of: general, build, plan';
+    }
+
+    // Validate variant
+    const variant = answers.variant;
+    if (
+      variant !== undefined &&
+      variant !== '' &&
+      !['minimal', 'high', 'max'].includes(String(variant))
+    ) {
+      return 'Invalid variant. Must be one of: minimal, high, max';
     }
 
     return null;

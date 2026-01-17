@@ -59,9 +59,25 @@ describe('OpenCodeAgentPlugin', () => {
       expect(await plugin.isReady()).toBe(true);
     });
 
-    test('accepts variant config', async () => {
+    test('accepts variant config: high', async () => {
       await plugin.initialize({ variant: 'high' });
       expect(await plugin.isReady()).toBe(true);
+    });
+
+    test('accepts variant config: max', async () => {
+      await plugin.initialize({ variant: 'max' });
+      expect(await plugin.isReady()).toBe(true);
+    });
+
+    test('accepts variant config: minimal', async () => {
+      await plugin.initialize({ variant: 'minimal' });
+      expect(await plugin.isReady()).toBe(true);
+    });
+
+    test('ignores invalid variant value', async () => {
+      await plugin.initialize({ variant: 'invalid' });
+      expect(await plugin.isReady()).toBe(true);
+      // Invalid variants are silently ignored (similar to invalid agent types)
     });
 
     test('accepts agent type config', async () => {
@@ -144,6 +160,28 @@ describe('OpenCodeAgentPlugin', () => {
       expect(await plugin.validateSetup({ provider: 'openai' })).toBeNull();
       expect(await plugin.validateSetup({ provider: 'google' })).toBeNull();
       expect(await plugin.validateSetup({ provider: 'custom-provider' })).toBeNull();
+    });
+
+    test('accepts valid variant: minimal', async () => {
+      expect(await plugin.validateSetup({ variant: 'minimal' })).toBeNull();
+    });
+
+    test('accepts valid variant: high', async () => {
+      expect(await plugin.validateSetup({ variant: 'high' })).toBeNull();
+    });
+
+    test('accepts valid variant: max', async () => {
+      expect(await plugin.validateSetup({ variant: 'max' })).toBeNull();
+    });
+
+    test('accepts empty variant', async () => {
+      expect(await plugin.validateSetup({ variant: '' })).toBeNull();
+    });
+
+    test('rejects invalid variant', async () => {
+      const result = await plugin.validateSetup({ variant: 'invalid' });
+      expect(result).not.toBeNull();
+      expect(result).toContain('Invalid variant');
     });
   });
 

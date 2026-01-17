@@ -299,6 +299,14 @@ function getDefaultAgentConfig(
       };
     }
 
+    // Apply CLI --variant to agent options (for agents like OpenCode that support it)
+    if (options.variant) {
+      result = {
+        ...result,
+        options: { ...result.options, variant: options.variant },
+      };
+    }
+
     // Apply fallbackAgents shorthand (only if not already set on agent config)
     if (storedConfig.fallbackAgents && !result.fallbackAgents) {
       result = {

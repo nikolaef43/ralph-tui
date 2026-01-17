@@ -90,6 +90,9 @@ export interface RuntimeOptions {
   /** Override model for the agent */
   model?: string;
 
+  /** Override model variant for the agent (e.g., minimal, high, max for Gemini) */
+  variant?: string;
+
   /** Override tracker plugin */
   tracker?: string;
 
