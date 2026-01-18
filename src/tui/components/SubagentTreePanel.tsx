@@ -166,6 +166,14 @@ export interface SubagentTreePanelProps {
   activeSubagentId?: string;
   /** Panel width for truncation calculations */
   width?: number;
+  /** Main agent name (e.g., "Claude Code") shown at tree root */
+  mainAgentName?: string;
+  /** Main agent status for display icon */
+  mainAgentStatus?: 'running' | 'completed' | 'error' | 'idle';
+  /** Currently selected node ID (for keyboard navigation) */
+  selectedId?: string | 'main';
+  /** Callback when a node is selected */
+  onSelect?: (id: string | 'main') => void;
 }
 
 /**
@@ -212,14 +220,50 @@ function countSubagents(nodes: SubagentTreeNode[]): number {
 }
 
 /**
+ * Get status icon for main agent.
+ */
+function getMainAgentIcon(status: 'running' | 'completed' | 'error' | 'idle'): string {
+  switch (status) {
+    case 'running':
+      return '◉'; // Filled circle for main agent running
+    case 'completed':
+      return '✓';
+    case 'error':
+      return '✗';
+    default:
+      return '○';
+  }
+}
+
+/**
+ * Get status color for main agent.
+ */
+function getMainAgentColor(status: 'running' | 'completed' | 'error' | 'idle'): string {
+  switch (status) {
+    case 'running':
+      return colors.accent.primary;
+    case 'completed':
+      return colors.status.success;
+    case 'error':
+      return colors.status.error;
+    default:
+      return colors.fg.muted;
+  }
+}
+
+/**
  * SubagentTreePanel component showing a dedicated panel with subagent hierarchy.
- * Displays: agent type, description (truncated), status icon, duration.
- * Features: indented nested subagents, highlighted active subagent, auto-scroll.
+ * Displays: main agent at root, subagents as children with types, descriptions, status icons, durations.
+ * Features: indented nested subagents, highlighted active/selected nodes, auto-scroll.
  */
 export function SubagentTreePanel({
   tree,
   activeSubagentId,
   width = 45,
+  mainAgentName = 'Main Agent',
+  mainAgentStatus = 'running',
+  selectedId,
+  onSelect: _onSelect, // Reserved for future keyboard navigation
 }: SubagentTreePanelProps): ReactNode {
   // Calculate max width for row content (panel width minus padding and border)
   const maxRowWidth = Math.max(20, width - 4);
@@ -241,8 +285,10 @@ export function SubagentTreePanel({
 
   // Build title with counts
   const title = runningCount > 0
-    ? `Subagents (${runningCount} running / ${totalSubagents} total)`
-    : `Subagents (${totalSubagents})`;
+    ? `Agent Tree (${runningCount} active)`
+    : totalSubagents > 0
+      ? `Agent Tree (${totalSubagents})`
+      : 'Agent Tree';
 
   // Use a ref for auto-scroll behavior
   // Note: In @opentui/react, scrollbox auto-scrolls when content exceeds height
@@ -254,6 +300,11 @@ export function SubagentTreePanel({
     // This is handled automatically by the scrollbox component when content grows
     prevTreeLengthRef.current = totalSubagents;
   }, [totalSubagents]);
+
+  // Determine if main agent is selected
+  const isMainSelected = selectedId === 'main';
+  const mainIcon = getMainAgentIcon(mainAgentStatus);
+  const mainColor = getMainAgentColor(mainAgentStatus);
 
   return (
     <box
@@ -275,15 +326,40 @@ export function SubagentTreePanel({
           width: '100%',
         }}
       >
+        {/* Main agent as root */}
+        <box
+          style={{
+            width: '100%',
+            flexDirection: 'row',
+            paddingLeft: 1,
+            paddingRight: 1,
+            backgroundColor: isMainSelected ? colors.bg.highlight : 'transparent',
+          }}
+        >
+          <text>
+            <span fg={mainColor}>{mainIcon}</span>
+            <span fg={isMainSelected ? colors.fg.primary : colors.accent.primary}> {mainAgentName}</span>
+            {tree.length > 0 && <span fg={colors.fg.muted}> ({tree.length} subagent{tree.length > 1 ? 's' : ''})</span>}
+          </text>
+        </box>
+
+        {/* Subagents as children */}
         {tree.length === 0 ? (
-          <box style={{ padding: 1 }}>
-            <text fg={colors.fg.muted}>No subagents spawned</text>
+          <box style={{ paddingLeft: 3 }}>
+            <text fg={colors.fg.muted}>└─ No subagents</text>
           </box>
         ) : (
           tree.map((node) => (
             <SubagentTreeNodeRows
               key={node.state.id}
-              node={node}
+              node={{
+                ...node,
+                state: {
+                  ...node.state,
+                  // Increase depth by 1 since main agent is at depth 0
+                  depth: node.state.depth + 1,
+                },
+              }}
               activeSubagentId={effectiveActiveId}
               maxWidth={maxRowWidth}
             />

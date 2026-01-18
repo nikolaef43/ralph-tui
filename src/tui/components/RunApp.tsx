@@ -386,8 +386,9 @@ export function RunApp({
   const [promptPreview, setPromptPreview] = useState<string | undefined>(undefined);
   const [templateSource, setTemplateSource] = useState<string | undefined>(undefined);
   // Subagent tracing detail level - initialized from config, can be cycled with 't' key
+  // Default to 'moderate' to show inline subagent sections by default
   const [subagentDetailLevel, setSubagentDetailLevel] = useState<SubagentDetailLevel>(
-    () => storedConfig?.subagentTracingDetail ?? 'off'
+    () => storedConfig?.subagentTracingDetail ?? 'moderate'
   );
   // Subagent tree for the current iteration (from engine.getSubagentTree())
   const [subagentTree, setSubagentTree] = useState<SubagentTreeNode[]>([]);
@@ -414,6 +415,9 @@ export function RunApp({
   // Subagent tree panel visibility state (toggled with 'T' key)
   // Tracks subagents even when panel is hidden (subagentTree state continues updating)
   const [subagentPanelVisible, setSubagentPanelVisible] = useState(initialSubagentPanelVisible);
+  // Track if user manually hid the panel (to respect user intent for auto-show logic)
+  // When true, auto-show will not override user's explicit hide action
+  const [userManuallyHidPanel, setUserManuallyHidPanel] = useState(false);
 
   // Active agent state from engine - tracks which agent is running and why (primary/fallback)
   const [activeAgentState, setActiveAgentState] = useState<ActiveAgentState | null>(null);
@@ -422,6 +426,17 @@ export function RunApp({
 
   // Compute display agent name - prefer active agent from engine state, fallback to config
   const displayAgentName = activeAgentState?.plugin ?? agentName;
+
+  // Count running subagents for status indicator when panel is hidden
+  const runningSubagentCount = useMemo(() => {
+    const countRunning = (nodes: SubagentTreeNode[]): number => {
+      return nodes.reduce((sum, node) => {
+        const self = node.state.status === 'running' ? 1 : 0;
+        return sum + self + countRunning(node.children);
+      }, 0);
+    };
+    return countRunning(subagentTree);
+  }, [subagentTree]);
 
   // Filter and sort tasks for display
   // Sort order: active → actionable → blocked → done → closed
@@ -452,6 +467,16 @@ export function RunApp({
       setSelectedIndex(displayedTasks.length - 1);
     }
   }, [displayedTasks.length, selectedIndex]);
+
+  // Auto-show subagent panel when first subagent spawns (unless user manually hid it)
+  // This makes subagent activity discoverable without requiring users to know about 'T' key
+  useEffect(() => {
+    if (subagentTree.length > 0 && !subagentPanelVisible && !userManuallyHidPanel) {
+      setSubagentPanelVisible(true);
+      // Also persist the change to session state
+      onSubagentPanelVisibilityChange?.(true);
+    }
+  }, [subagentTree.length, subagentPanelVisible, userManuallyHidPanel, onSubagentPanelVisibilityChange]);
 
   // Regenerate prompt preview when selected task changes (if in prompt view mode)
   // This keeps the prompt preview in sync with the currently selected task/iteration
@@ -568,6 +593,8 @@ export function RunApp({
           setSubagentTree([]);
           setCollapsedSubagents(new Set());
           setFocusedSubagentId(undefined);
+          // Reset user manual hide state for new iteration - allows auto-show for new subagents
+          setUserManuallyHidPanel(false);
           // Set current task info for display
           setCurrentTaskId(event.task.id);
           setCurrentTaskTitle(event.task.title);
@@ -662,11 +689,10 @@ export function RunApp({
             // Also update segments for TUI-native color rendering
             setCurrentSegments(outputParserRef.current.getSegments());
           }
-          // Refresh subagent tree from engine (subagent events are processed in engine)
-          // Only refresh if subagent tracing is enabled to avoid unnecessary work
-          if (subagentDetailLevel !== 'off') {
-            setSubagentTree(engine.getSubagentTree());
-          }
+          // Always refresh subagent tree from engine (subagent events are processed in engine).
+          // This decouples data collection from display preferences - the subagentDetailLevel
+          // only affects how much detail to show inline, not whether to track subagents.
+          setSubagentTree(engine.getSubagentTree());
           break;
 
         case 'agent:switched':
@@ -718,7 +744,7 @@ export function RunApp({
     });
 
     return unsubscribe;
-  }, [engine, subagentDetailLevel]);
+  }, [engine]);
 
   // Update elapsed time every second - only while executing
   // Timer accumulates total execution time across all iterations
@@ -1047,6 +1073,11 @@ export function RunApp({
             // The panel shows on the right side; subagent tracking continues even when hidden
             setSubagentPanelVisible((prev) => {
               const newVisible = !prev;
+              // If user is hiding the panel, mark it as manually hidden
+              // This prevents auto-show from overriding user intent
+              if (!newVisible) {
+                setUserManuallyHidPanel(true);
+              }
               // Persist the change to session state
               onSubagentPanelVisibilityChange?.(newVisible);
               return newVisible;
@@ -1458,6 +1489,8 @@ export function RunApp({
                 tree={subagentTree}
                 activeSubagentId={focusedSubagentId}
                 width={45}
+                mainAgentName={displayAgentName}
+                mainAgentStatus={status === 'executing' ? 'running' : status === 'complete' ? 'completed' : status === 'error' ? 'error' : 'idle'}
               />
             )}
           </>
@@ -1494,6 +1527,8 @@ export function RunApp({
                 tree={subagentTree}
                 activeSubagentId={focusedSubagentId}
                 width={45}
+                mainAgentName={displayAgentName}
+                mainAgentStatus={status === 'executing' ? 'running' : status === 'complete' ? 'completed' : status === 'error' ? 'error' : 'idle'}
               />
             )}
           </>
@@ -1503,13 +1538,33 @@ export function RunApp({
       {/* Footer */}
       <Footer />
 
+      {/* Subagent activity indicator - shows when panel is hidden but subagents are running */}
+      {!subagentPanelVisible && runningSubagentCount > 0 && (
+        <box
+          style={{
+            position: 'absolute',
+            bottom: 2,
+            right: 2,
+            paddingLeft: 1,
+            paddingRight: 1,
+            backgroundColor: colors.bg.tertiary,
+            border: true,
+            borderColor: colors.status.info,
+          }}
+        >
+          <text fg={colors.status.info}>
+            ▸ {runningSubagentCount} subagent{runningSubagentCount > 1 ? 's' : ''} running (T to show)
+          </text>
+        </box>
+      )}
+
       {/* Copy feedback toast - positioned at bottom right */}
       {copyFeedback && (
         <box
           style={{
             position: 'absolute',
             bottom: 2,
-            right: 2,
+            right: copyFeedback && !subagentPanelVisible && runningSubagentCount > 0 ? 40 : 2,
             paddingLeft: 1,
             paddingRight: 1,
             backgroundColor: colors.bg.tertiary,

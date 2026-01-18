@@ -462,6 +462,15 @@ export class SubagentTraceParser {
   }
 
   /**
+   * Get the active subagent stack (deepest first).
+   * Returns array of subagent IDs in order from deepest to shallowest.
+   * Empty array if no subagents are active.
+   */
+  getActiveStack(): string[] {
+    return [...this.activeStack].reverse();
+  }
+
+  /**
    * Get a summary of subagent activity.
    */
   getSummary(): SubagentTraceSummary {

@@ -807,15 +807,16 @@ export class ExecutionEngine {
       flags.push('--model', this.config.model);
     }
 
-    // Check if agent supports subagent tracing
+    // Check if agent declares subagent tracing support (used for agent-specific flags)
     const supportsTracing = this.agent!.meta.supportsSubagentTracing;
 
-    // Create streaming JSONL parser if tracing is enabled
-    const jsonlParser = supportsTracing
-      ? this.agent?.meta.id === 'droid'
-        ? createDroidStreamingJsonlParser()
-        : ClaudeAgentPlugin.createStreamingJsonlParser()
-      : null;
+    // Always create a streaming JSONL parser for optimistic subagent tracking.
+    // Even if an agent doesn't declare supportsSubagentTracing, it might still
+    // output Task tool events that we can track. Parse errors are caught and ignored.
+    // This future-proofs for any agent that outputs Task tool events.
+    const jsonlParser = this.agent?.meta.id === 'droid'
+      ? createDroidStreamingJsonlParser()
+      : ClaudeAgentPlugin.createStreamingJsonlParser();
 
     try {
       // Execute agent with subagent tracing if supported
@@ -1369,6 +1370,33 @@ export class ExecutionEngine {
     }
 
     return depth;
+  }
+
+  /**
+   * Get output/result for a specific subagent by ID.
+   * For completed subagents, returns their result content.
+   * For running subagents, returns undefined (use currentOutput for live streaming).
+   *
+   * @param id - Subagent ID to get output for
+   * @returns Subagent result content, or undefined if not found or still running
+   */
+  getSubagentOutput(id: string): string | undefined {
+    const state = this.subagentParser.getSubagent(id);
+    if (!state) return undefined;
+    // Return result only for completed/errored subagents
+    if (state.status === 'completed' || state.status === 'error') {
+      return state.result;
+    }
+    return undefined;
+  }
+
+  /**
+   * Get the currently active subagent ID (deepest in the hierarchy).
+   * Returns undefined if no subagent is currently active.
+   */
+  getActiveSubagentId(): string | undefined {
+    const stack = this.subagentParser.getActiveStack();
+    return stack.length > 0 ? stack[0] : undefined;
   }
 
   /**
