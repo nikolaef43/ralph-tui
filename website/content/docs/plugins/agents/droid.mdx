@@ -7,8 +7,8 @@ description: Run Factory Droid CLI (droid) as an autonomous agent in Ralph TUI.
 
 The Factory Droid agent plugin integrates with the `droid` CLI so Ralph TUI can execute tasks with Factory Droid alongside Claude Code and OpenCode.
 
-<Callout type="tip">
-Factory Droid supports subagent tracing via JSONL stream output. Enable tracing to view tool calls, costs, and execution events.
+<Callout type="info">
+Factory Droid supports tracing of tool calls, costs, and execution events. Subagent tracing is not currently supported.
 </Callout>
 
 ## Prerequisites
@@ -88,9 +88,9 @@ model = "claude-opus-4-5-20251101"
 reasoningEffort = "high"
 ```
 
-## Subagent Tracing
+## Output Tracing
 
-When `enableTracing = true` and subagent tracing is enabled in the TUI, Ralph TUI requests JSONL stream output and parses:
+When `enableTracing = true`, Ralph TUI requests JSONL stream output and parses:
 
 - Tool calls and arguments
 - Assistant messages and result events
@@ -99,11 +99,7 @@ When `enableTracing = true` and subagent tracing is enabled in the TUI, Ralph TU
 
 Toggle tracing in the TUI:
 - Press `t` to cycle tracing detail levels
-- Press `u` to show/hide the tracing panel
-
-<Callout type="info">
-Tracing requires `subagentTracingDetail` to be set above `"off"`.
-</Callout>
+- Press `u` to show/hide the output panel
 
 ## Autonomous Operation
 

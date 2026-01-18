@@ -229,13 +229,19 @@ OpenCode emits metadata lines during execution (tool calls, progress indicators)
 
 The filtered output shows only the agent's actual responses.
 
-## No Subagent Tracing
+## Subagent Tracing
 
-<Callout type="warning">
-Unlike Claude Code, OpenCode does not support subagent tracing. The tracing panel will be empty when using OpenCode.
+<Callout type="tip">
+OpenCode supports subagent tracing! Ralph TUI automatically detects and displays Task tool invocations in the subagent tree panel.
 </Callout>
 
-If you need visibility into tool calls, consider using Claude Code instead or reviewing OpenCode's native output.
+When OpenCode spawns subagents (using the Task tool), Ralph TUI:
+
+1. **Detects subagent spawns**: Parses OpenCode's JSONL output for Task tool invocations
+2. **Shows hierarchy**: Displays subagents in the tree panel (toggle with `T`)
+3. **Captures results**: Shows each subagent's prompt and result when selected
+
+This works with any provider (Anthropic, OpenAI, Google, etc.) as long as the underlying model supports tool use.
 
 ## Rate Limit Handling
 
@@ -343,6 +349,6 @@ If you see warnings about agent types, either:
 
 ## Next Steps
 
-- **[Claude Code Agent](/docs/plugins/agents/claude)** - Anthropic-specific with subagent tracing
+- **[Claude Code Agent](/docs/plugins/agents/claude)** - Anthropic-specific CLI integration
 - **[Configuration](/docs/configuration/options)** - Full options reference
 - **[Prompt Templates](/docs/templates)** - Customize task prompts

@@ -30,7 +30,7 @@ export class DroidAgentPlugin extends BaseAgentPlugin {
     supportsStreaming: true,
     supportsInterrupt: true,
     supportsFileContext: false,
-    supportsSubagentTracing: true,
+    supportsSubagentTracing: false,
     structuredOutputFormat: 'jsonl',
     skillsPaths: {
       personal: '~/.factory/skills',
@@ -43,8 +43,8 @@ export class DroidAgentPlugin extends BaseAgentPlugin {
   // Default to true: droid exec cannot show interactive prompts without a TTY
   private skipPermissions = true;
   private enableTracing = true;
-  // Track effective subagent tracing support (can be disabled via config)
-  private effectiveSupportsSubagentTracing = true;
+  // Subagent tracing is not currently supported for Factory Droid
+  private effectiveSupportsSubagentTracing = false;
 
   /**
    * Returns meta with effectiveSupportsSubagentTracing applied.

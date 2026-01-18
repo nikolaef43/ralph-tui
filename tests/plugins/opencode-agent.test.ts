@@ -38,8 +38,8 @@ describe('OpenCodeAgentPlugin', () => {
       expect(plugin.meta.supportsFileContext).toBe(true);
     });
 
-    test('does not support subagent tracing', () => {
-      expect(plugin.meta.supportsSubagentTracing).toBe(false);
+    test('supports subagent tracing', () => {
+      expect(plugin.meta.supportsSubagentTracing).toBe(true);
     });
   });
 

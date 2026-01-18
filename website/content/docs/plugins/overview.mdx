@@ -27,8 +27,8 @@ Agent plugins connect to AI coding assistants that execute tasks. They handle:
 
 **Built-in agents:**
 - **[Claude Code](/docs/plugins/agents/claude)** - Anthropic's Claude CLI with subagent tracing
-- **[OpenCode](/docs/plugins/agents/opencode)** - Open-source multi-provider agent
-- **[Factory Droid](/docs/plugins/agents/droid)** - Factory Droid CLI with JSONL tracing
+- **[OpenCode](/docs/plugins/agents/opencode)** - Open-source multi-provider agent with subagent tracing
+- **[Factory Droid](/docs/plugins/agents/droid)** - Factory Droid CLI (no subagent tracing)
 
 ### Tracker Plugins
 
@@ -82,7 +82,7 @@ The execution engine orchestrates plugins:
 |---------|-------------|----------|--------------|
 | Provider | Anthropic | Multi-provider | Factory |
 | Models | sonnet, opus, haiku | Any via provider/model format | Factory model list |
-| Subagent Tracing | Yes (JSONL) | No | Yes (JSONL) |
+| Subagent Tracing | Yes (Task tool) | Yes (Task tool) | No |
 | File Context | Yes (--add-dir) | Yes (--file) | No (uses `--cwd`) |
 | Streaming | Yes | Yes | Yes |
 | Installation | `npm i -g @anthropic-ai/claude-code` | `curl -fsSL https://opencode.ai/install \| bash` | [Factory Droid CLI](https://docs.factory.ai/reference/cli-reference) |

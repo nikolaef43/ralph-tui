@@ -35,6 +35,10 @@ import { SubagentTraceParser } from '../plugins/agents/tracing/parser.js';
 import type { SubagentEvent } from '../plugins/agents/tracing/types.js';
 import type { ClaudeJsonlMessage } from '../plugins/agents/builtin/claude.js';
 import { createDroidStreamingJsonlParser, isDroidJsonlMessage, toClaudeJsonlMessages } from '../plugins/agents/droid/outputParser.js';
+import {
+  isOpenCodeTaskTool,
+  openCodeTaskToClaudeMessages,
+} from '../plugins/agents/opencode/outputParser.js';
 import { updateSessionIteration, updateSessionStatus, updateSessionMaxIterations } from '../session/index.js';
 import { saveIterationLog, buildSubagentTrace, createProgressEntry, appendProgress, getRecentProgressSummary, getCodebasePatternsForPrompt } from '../logs/index.js';
 import type { AgentSwitchEntry } from '../logs/index.js';
@@ -810,12 +814,10 @@ export class ExecutionEngine {
     // Check if agent declares subagent tracing support (used for agent-specific flags)
     const supportsTracing = this.agent!.meta.supportsSubagentTracing;
 
-    // For Droid agent, we need a JSONL parser since Droid uses different output format.
-    // For Claude, we use the onJsonlMessage callback which gets pre-parsed messages.
+    // For Droid agent, we need a JSONL parser since it uses a different output format.
+    // For Claude and OpenCode, we use the onJsonlMessage callback which gets pre-parsed messages.
     const isDroidAgent = this.agent?.meta.id === 'droid';
-    const jsonlParser = isDroidAgent
-      ? createDroidStreamingJsonlParser()
-      : null; // Claude uses onJsonlMessage callback instead
+    const droidJsonlParser = isDroidAgent ? createDroidStreamingJsonlParser() : null;
 
     try {
       // Execute agent with subagent tracing if supported
@@ -824,10 +826,31 @@ export class ExecutionEngine {
         flags,
         sandbox: this.config.sandbox,
         subagentTracing: supportsTracing,
-        // Callback for pre-parsed JSONL messages (used by Claude plugin)
+        // Callback for pre-parsed JSONL messages (used by Claude and OpenCode plugins)
         // This receives raw JSON objects directly from the agent's parsed JSONL output.
         onJsonlMessage: (message: Record<string, unknown>) => {
-          // Convert raw JSON to ClaudeJsonlMessage format for SubagentParser
+          // Check if this is OpenCode format (has 'part' with 'tool' property)
+          const part = message.part as Record<string, unknown> | undefined;
+          if (message.type === 'tool_use' && part?.tool) {
+            // OpenCode format - convert using OpenCode parser
+            const openCodeMessage = {
+              source: 'opencode' as const,
+              type: message.type as string,
+              timestamp: message.timestamp as number | undefined,
+              sessionID: message.sessionID as string | undefined,
+              part: part as import('../plugins/agents/opencode/outputParser.js').OpenCodePart,
+              raw: message,
+            };
+            // Check if it's a Task tool and convert to Claude format
+            if (isOpenCodeTaskTool(openCodeMessage)) {
+              for (const claudeMessage of openCodeTaskToClaudeMessages(openCodeMessage)) {
+                this.subagentParser.processMessage(claudeMessage);
+              }
+            }
+            return;
+          }
+
+          // Claude format - convert raw JSON to ClaudeJsonlMessage format for SubagentParser
           const claudeMessage: ClaudeJsonlMessage = {
             type: message.type as string | undefined,
             message: message.message as string | undefined,
@@ -851,8 +874,8 @@ export class ExecutionEngine {
 
           // For Droid agent, parse JSONL output for subagent events
           // (Claude uses onJsonlMessage callback instead)
-          if (jsonlParser && isDroidAgent) {
-            const results = jsonlParser.push(data);
+          if (droidJsonlParser && isDroidAgent) {
+            const results = droidJsonlParser.push(data);
             for (const result of results) {
               if (result.success) {
                 if (isDroidJsonlMessage(result.message)) {
@@ -865,6 +888,7 @@ export class ExecutionEngine {
               }
             }
           }
+
         },
         onStderr: (data) => {
           this.state.currentStderr += data;
@@ -884,9 +908,9 @@ export class ExecutionEngine {
       const agentResult = await handle.promise;
       this.currentExecution = null;
 
-      // Flush any remaining buffered JSONL data (only for Droid agent)
-      if (jsonlParser && isDroidAgent) {
-        const remaining = jsonlParser.flush();
+      // Flush any remaining buffered JSONL data for Droid agent
+      if (droidJsonlParser && isDroidAgent) {
+        const remaining = droidJsonlParser.flush();
         for (const result of remaining) {
           if (result.success) {
             if (isDroidJsonlMessage(result.message)) {
