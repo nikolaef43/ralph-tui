@@ -50,38 +50,83 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install lcov
+        run: sudo apt-get update && sudo apt-get install -y lcov
+
       - name: Run tests with coverage
         run: |
           set -o pipefail
+          mkdir -p coverage-parts
+
           # Run tests in batches to avoid mock.module() conflicts between test files
-          # tests/ directory contains most tests and runs cleanly
-          # src/ command tests with mocks are run individually to prevent cross-file pollution
+          # Each batch outputs its own lcov file for later merging
           {
             bun test tests/ --coverage --coverage-reporter=text --coverage-reporter=lcov
-            bun test src/commands/doctor.test.ts --coverage --coverage-reporter=text
-            bun test src/commands/info.test.ts --coverage --coverage-reporter=text
-            bun test src/commands/skills.test.ts --coverage --coverage-reporter=text
-            bun test src/config/ --coverage --coverage-reporter=text
-            bun test src/engine/ --coverage --coverage-reporter=text
-            bun test src/plugins/ --coverage --coverage-reporter=text
-            bun test src/sandbox/ --coverage --coverage-reporter=text
-            bun test src/setup/ --coverage --coverage-reporter=text
-            bun test src/templates/ --coverage --coverage-reporter=text
-            bun test src/tui/ --coverage --coverage-reporter=text
+            cp coverage/lcov.info coverage-parts/tests.lcov
+
+            bun test src/commands/doctor.test.ts --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/doctor.lcov
+
+            bun test src/commands/info.test.ts --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/info.lcov
+
+            bun test src/commands/skills.test.ts --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/skills.lcov
+
+            bun test src/config/ --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/config.lcov
+
+            bun test src/engine/ --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/engine.lcov
+
+            bun test src/plugins/ --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/plugins.lcov
+
+            bun test src/sandbox/ --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/sandbox.lcov
+
+            bun test src/setup/ --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/setup.lcov
+
+            bun test src/templates/ --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/templates.lcov
+
+            bun test src/tui/ --coverage --coverage-reporter=text --coverage-reporter=lcov
+            cp coverage/lcov.info coverage-parts/tui.lcov
           } 2>&1 | tee coverage-output.txt
+
+      - name: Merge coverage reports
+        run: |
+          # Merge all lcov files into one
+          lcov \
+            --add-tracefile coverage-parts/tests.lcov \
+            --add-tracefile coverage-parts/doctor.lcov \
+            --add-tracefile coverage-parts/info.lcov \
+            --add-tracefile coverage-parts/skills.lcov \
+            --add-tracefile coverage-parts/config.lcov \
+            --add-tracefile coverage-parts/engine.lcov \
+            --add-tracefile coverage-parts/plugins.lcov \
+            --add-tracefile coverage-parts/sandbox.lcov \
+            --add-tracefile coverage-parts/setup.lcov \
+            --add-tracefile coverage-parts/templates.lcov \
+            --add-tracefile coverage-parts/tui.lcov \
+            --output-file coverage/lcov.info \
+            --rc lcov_branch_coverage=1
+
+          # Generate summary and save to file
+          lcov --summary coverage/lcov.info --rc lcov_branch_coverage=1 2>&1 | tee coverage-summary.txt
 
       - name: Check coverage threshold
         run: |
-          # Extract coverage percentage from bun test output
-          COVERAGE=$(grep -E "^All files" coverage-output.txt | awk '{print $4}' | tr -d '%' || true)
-          if [ -z "$COVERAGE" ]; then
-            # Try alternative parsing
-            COVERAGE=$(grep -E "[0-9]+\.[0-9]+%" coverage-output.txt | tail -1 | grep -oE "[0-9]+\.[0-9]+" | head -1 || true)
-          fi
-          # Normalize: strip whitespace/% and default to 0 if empty
-          COVERAGE=$(echo "$COVERAGE" | tr -d '% \t\n')
+          # Extract line coverage percentage from lcov summary
+          # Format: "  lines......: XX.X% (XXXX of XXXX lines)"
+          COVERAGE=$(grep -E "lines\.*:" coverage-summary.txt | grep -oE "[0-9]+\.[0-9]+" | head -1 || true)
+
+          # Fallback if parsing fails
           [ -z "$COVERAGE" ] && COVERAGE="0"
-          echo "Coverage: $COVERAGE%"
+
+          echo "Merged Coverage: $COVERAGE%"
+
           # Check if coverage is below 40%
           if [ "$(echo "$COVERAGE < 40" | bc -l)" -eq 1 ]; then
             echo "❌ Coverage $COVERAGE% is below 40% threshold"
