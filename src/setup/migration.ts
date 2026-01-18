@@ -4,8 +4,7 @@
  * Ensures skills and templates are updated while preserving user customizations.
  */
 
-import { access, constants, readFile, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { access, constants } from 'node:fs/promises';
 
 import {
   loadProjectConfigOnly,
@@ -14,7 +13,7 @@ import {
 } from '../config/index.js';
 import type { StoredConfig } from '../config/types.js';
 import { listBundledSkills, installSkill } from './skill-installer.js';
-import { getBuiltinTemplate } from '../templates/engine.js';
+import { installBuiltinTemplates } from '../templates/engine.js';
 
 /**
  * Current config version. Bump this when making breaking changes
@@ -162,13 +161,10 @@ export async function migrateConfig(
       }
     }
 
-    // 2. Check for template updates
-    // We only update templates if the user hasn't customized them
-    const templateUpdated = await updateTemplateIfNotCustomized(cwd, options.quiet);
+    // 2. Install builtin templates to global config directory
+    // Templates are only installed if they don't already exist (preserves customizations)
+    const templateUpdated = installGlobalTemplatesIfMissing(options.quiet);
     result.templatesUpdated = templateUpdated;
-    if (templateUpdated) {
-      log('   ✓ Updated prompt template');
-    }
 
     // 3. Update config version
     const configPath = getProjectConfigPath(cwd);
@@ -212,55 +208,45 @@ export async function migrateConfig(
 }
 
 /**
- * Update the prompt template if the user hasn't customized it.
- * - If template is missing → write new default template
- * - If template exists and matches current default → no update needed
- * - If template exists but differs → preserve user customization
+ * Install builtin templates to the global config directory (~/.config/ralph-tui/templates/).
+ * Templates are only written if they don't already exist (preserves user customizations).
+ * Project-level templates (.ralph-tui/templates/) take precedence over global templates.
  *
- * @param cwd Working directory
  * @param quiet Suppress output
- * @returns true if template was updated
+ * @returns true if any templates were installed
  */
-async function updateTemplateIfNotCustomized(
-  cwd: string,
-  quiet?: boolean
-): Promise<boolean> {
+function installGlobalTemplatesIfMissing(quiet?: boolean): boolean {
   const log = quiet ? () => {} : console.log.bind(console);
 
   try {
-    const templateDir = join(cwd, '.ralph-tui');
-    const templatePath = join(templateDir, 'prompt.hbs');
-    const defaultTemplate = getBuiltinTemplate('default');
+    // Install builtin templates to global location (skip existing)
+    const result = installBuiltinTemplates(false);
 
-    // Check if template already exists
-    let existingTemplate: string | null = null;
-    try {
-      existingTemplate = await readFile(templatePath, 'utf-8');
-    } catch {
-      // Template doesn't exist
-    }
-
-    if (existingTemplate === null) {
-      // No template exists - write the default template
-      await mkdir(templateDir, { recursive: true });
-      await writeFile(templatePath, defaultTemplate, 'utf-8');
-      return true;
-    }
-
-    // Template exists - check if it matches current default
-    if (existingTemplate.trim() === defaultTemplate.trim()) {
-      // Already has the current default, no update needed
-      log('   · Prompt template is already current');
+    if (!result.success) {
+      const errors = result.results.filter((r) => r.error);
+      if (errors.length > 0) {
+        log(`   ⚠ Some templates failed to install: ${errors.map((e) => e.error).join(', ')}`);
+      }
       return false;
     }
 
-    // Template differs from default - user has customized it, preserve
-    log('   · Custom prompt template detected, preserving (run "ralph-tui template init --force" to update)');
+    const installed = result.results.filter((r) => r.created);
+    const skipped = result.results.filter((r) => r.skipped);
+
+    if (installed.length > 0) {
+      log(`   ✓ Installed ${installed.length} template(s) to ${result.templatesDir}`);
+      return true;
+    }
+
+    if (skipped.length > 0) {
+      log(`   · Templates already installed (${skipped.length} skipped)`);
+    }
+
     return false;
   } catch (error) {
     // Log error but don't fail migration
     if (!quiet) {
-      console.warn(`   ⚠ Could not update template: ${error instanceof Error ? error.message : error}`);
+      console.warn(`   ⚠ Could not install templates: ${error instanceof Error ? error.message : error}`);
     }
     return false;
   }
