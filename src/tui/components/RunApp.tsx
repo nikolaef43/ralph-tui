@@ -621,7 +621,9 @@ export function RunApp({
       await instanceManager.subscribeToSelectedRemote();
     };
 
-    fetchRemoteData();
+    fetchRemoteData().catch((err) => {
+      console.error('Failed to fetch remote data:', err);
+    });
 
     // Subscribe to engine events from InstanceManager
     const unsubscribe = instanceManager.onEngineEvent((event) => {
@@ -664,6 +666,8 @@ export function RunApp({
             if (state?.subagentTree) {
               setRemoteSubagentTree(state.subagentTree);
             }
+          }).catch((err) => {
+            console.error('Failed to refresh remote state:', err);
           });
           break;
         case 'task:completed':
@@ -672,6 +676,8 @@ export function RunApp({
             if (tasks) {
               setRemoteTasks(convertTasksWithDependencyStatus(tasks));
             }
+          }).catch((err) => {
+            console.error('Failed to refresh remote tasks:', err);
           });
           break;
         case 'agent:switched':
@@ -1693,6 +1699,9 @@ export function RunApp({
                   setRemoteManagementMode('edit');
                   setShowRemoteManagement(true);
                 }
+              }).catch((err) => {
+                console.error('Failed to load remote config for editing:', err);
+                setInfoFeedback('Failed to load remote configuration');
               });
             }
           }
@@ -1715,6 +1724,9 @@ export function RunApp({
                   setRemoteManagementMode('delete');
                   setShowRemoteManagement(true);
                 }
+              }).catch((err) => {
+                console.error('Failed to load remote config for deletion:', err);
+                setInfoFeedback('Failed to load remote configuration');
               });
             }
           }

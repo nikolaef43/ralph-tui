@@ -372,7 +372,7 @@ Opens a form dialog to configure a new remote:
 Use `Tab`/`Shift+Tab` to move between fields, `Enter` to save, `Esc` to cancel.
 
 **Edit Remote (`e` key):**
-When viewing a remote tab, press `e` to edit its configuration. The form pre-fills with current values. You can change any field including the alias.
+When viewing a remote tab, press `e` to edit its configuration. The form pre-fills with current values. You can change any field, including the alias.
 
 **Delete Remote (`x` key):**
 When viewing a remote tab, press `x` to delete it. A confirmation dialog shows the remote details before deletion.
