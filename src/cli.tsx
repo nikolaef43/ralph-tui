@@ -21,6 +21,7 @@ import {
   executeDoctorCommand,
   executeInfoCommand,
   executeSkillsCommand,
+  executeListenCommand,
 } from './commands/index.js';
 
 /**
@@ -39,6 +40,7 @@ Commands:
   run [options]       Start Ralph execution
   resume [options]    Resume an interrupted session
   status [options]    Check session status (headless, for CI/scripts)
+  listen [options]    Start remote listener (WebSocket server)
   logs [options]      View/manage iteration output logs
   setup [options]     Run interactive project setup (alias: init)
   doctor [options]    Diagnose agent configuration issues
@@ -117,6 +119,8 @@ Examples:
   ralph-tui info -c                      # Copyable format for GitHub issues
   ralph-tui skills list                  # List bundled skills
   ralph-tui skills install --force       # Force reinstall all skills
+  ralph-tui listen                       # Start remote listener
+  ralph-tui listen --daemon              # Start as background daemon
 `);
 }
 
@@ -222,6 +226,12 @@ async function handleSubcommand(args: string[]): Promise<boolean> {
   // Skills command
   if (command === 'skills') {
     await executeSkillsCommand(args.slice(1));
+    return true;
+  }
+
+  // Listen command (remote listener)
+  if (command === 'listen') {
+    await executeListenCommand(args.slice(1));
     return true;
   }
 

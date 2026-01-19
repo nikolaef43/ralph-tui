@@ -85,3 +85,9 @@ export {
   executeSkillsCommand,
   printSkillsHelp,
 } from './skills.js';
+
+export {
+  executeListenCommand,
+  parseListenArgs,
+  printListenHelp,
+} from './listen.js';
