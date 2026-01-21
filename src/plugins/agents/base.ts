@@ -514,7 +514,17 @@ export abstract class BaseAgentPlugin implements AgentPlugin {
 
     // Call onEnd lifecycle hook before resolving
     // This allows plugins to flush buffers or perform cleanup
-    execution.options?.onEnd?.(result);
+    // Wrap in try/catch so exceptions don't prevent resolution
+    if (execution.options?.onEnd) {
+      try {
+        execution.options.onEnd(result);
+      } catch (err) {
+        if (process.env.RALPH_DEBUG) {
+          debugLog(`[DEBUG] onEnd hook threw error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        // Swallow error - always proceed to resolve
+      }
+    }
 
     // Resolve the promise
     if (process.env.RALPH_DEBUG) {
