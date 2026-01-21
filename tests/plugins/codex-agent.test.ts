@@ -251,18 +251,20 @@ describe('CodexAgentPlugin', () => {
       expect(args).not.toContain('--full-auto');
     });
 
-    test('includes --json when subagent tracing enabled', () => {
-      const args = testablePlugin.testBuildArgs('test prompt', undefined, {
+    test('always includes --json for output parsing', () => {
+      // JSON is always enabled for proper output parsing
+      const argsWithTracing = testablePlugin.testBuildArgs('test prompt', undefined, {
         subagentTracing: true,
       });
-      expect(args).toContain('--json');
-    });
+      expect(argsWithTracing).toContain('--json');
 
-    test('excludes --json when subagent tracing disabled', () => {
-      const args = testablePlugin.testBuildArgs('test prompt', undefined, {
+      const argsWithoutTracing = testablePlugin.testBuildArgs('test prompt', undefined, {
         subagentTracing: false,
       });
-      expect(args).not.toContain('--json');
+      expect(argsWithoutTracing).toContain('--json');
+
+      const argsNoOptions = testablePlugin.testBuildArgs('test prompt');
+      expect(argsNoOptions).toContain('--json');
     });
 
     test('includes --model when model is configured', async () => {

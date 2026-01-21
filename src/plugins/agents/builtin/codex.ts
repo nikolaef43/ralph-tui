@@ -6,6 +6,7 @@
 
 import { spawn } from 'node:child_process';
 import { BaseAgentPlugin, findCommandPath } from '../base.js';
+import { processAgentEvents, processAgentEventsToSegments, type AgentDisplayEvent } from '../output-formatting.js';
 import type {
   AgentPluginMeta,
   AgentPluginFactory,
@@ -13,7 +14,109 @@ import type {
   AgentExecuteOptions,
   AgentSetupQuestion,
   AgentDetectResult,
+  AgentExecutionHandle,
 } from '../types.js';
+
+/**
+ * Extract a string error message from various error formats.
+ * Handles: string, { message: string }, or other objects.
+ */
+function extractErrorMessage(err: unknown): string {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object') {
+    const obj = err as Record<string, unknown>;
+    if (typeof obj.message === 'string') return obj.message;
+    if (typeof obj.error === 'string') return obj.error;
+    // Fallback: stringify the object
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return 'Unknown error';
+    }
+  }
+  return String(err);
+}
+
+/**
+ * Parse Codex JSON line into standardized display events.
+ * Returns AgentDisplayEvent[] - the shared processAgentEvents decides what to show.
+ *
+ * Codex event types (when using --json flag):
+ * - "message": Text output from the LLM (contains content array)
+ * - "function_call": Tool/function being called
+ * - "function_call_output": Tool execution result
+ * - "error": Error from Codex
+ */
+function parseCodexJsonLine(jsonLine: string): AgentDisplayEvent[] {
+  if (!jsonLine || jsonLine.length === 0) return [];
+
+  try {
+    const event = JSON.parse(jsonLine);
+    const events: AgentDisplayEvent[] = [];
+
+    // Codex uses different event structures - handle common patterns
+    if (event.type === 'message' || event.message) {
+      // IMPORTANT: Skip user messages - they echo the input prompt
+      if (event.role === 'user') {
+        return [];
+      }
+      // Message event with content array (assistant responses)
+      const content = event.content || event.message?.content;
+      if (Array.isArray(content)) {
+        for (const part of content) {
+          if (part.type === 'text' && part.text) {
+            events.push({ type: 'text', content: part.text });
+          } else if (part.type === 'tool_use' || part.type === 'function_call') {
+            const toolName = part.name || part.function?.name || 'unknown';
+            const toolInput = part.input || part.function?.arguments;
+            events.push({ type: 'tool_use', name: toolName, input: toolInput });
+          }
+        }
+      } else if (typeof content === 'string') {
+        events.push({ type: 'text', content });
+      }
+    } else if (event.type === 'function_call' || event.function_call) {
+      // Function call event
+      const call = event.function_call || event;
+      const toolName = call.name || call.function?.name || 'unknown';
+      const toolInput = call.arguments || call.input;
+      events.push({ type: 'tool_use', name: toolName, input: toolInput });
+    } else if (event.type === 'function_call_output' || event.type === 'tool_result') {
+      // Function result
+      const isError = event.is_error === true || event.error !== undefined;
+      if (isError) {
+        const errMsg = extractErrorMessage(event.error);
+        events.push({ type: 'error', message: errMsg || 'tool execution failed' });
+      }
+      events.push({ type: 'tool_result' });
+    } else if (event.type === 'text' && event.text) {
+      // Simple text event
+      events.push({ type: 'text', content: event.text });
+    } else if (event.type === 'error' || event.error) {
+      // Error event
+      const errorMsg = extractErrorMessage(event.error) || extractErrorMessage(event.message) || 'Unknown error';
+      events.push({ type: 'error', message: errorMsg });
+    }
+
+    return events;
+  } catch {
+    // Not valid JSON - skip silently
+    return [];
+  }
+}
+
+/**
+ * Parse Codex JSON stream output into display events.
+ */
+function parseCodexOutputToEvents(data: string): AgentDisplayEvent[] {
+  const allEvents: AgentDisplayEvent[] = [];
+  for (const line of data.split('\n')) {
+    const events = parseCodexJsonLine(line.trim());
+    allEvents.push(...events);
+  }
+  return allEvents;
+}
 
 /**
  * Codex CLI agent plugin implementation.
@@ -182,7 +285,7 @@ export class CodexAgentPlugin extends BaseAgentPlugin {
   protected buildArgs(
     _prompt: string,
     _files?: AgentFileContext[],
-    options?: AgentExecuteOptions
+    _options?: AgentExecuteOptions
   ): string[] {
     const args: string[] = [];
 
@@ -194,10 +297,9 @@ export class CodexAgentPlugin extends BaseAgentPlugin {
       args.push('--full-auto');
     }
 
-    // JSONL output
-    if (options?.subagentTracing) {
-      args.push('--json');
-    }
+    // Always use JSON format for output parsing
+    // This gives us structured events (text, tool_use, etc.) that we can format nicely
+    args.push('--json');
 
     // Model selection
     if (this.model) {
@@ -224,6 +326,61 @@ export class CodexAgentPlugin extends BaseAgentPlugin {
     _options?: AgentExecuteOptions
   ): string {
     return prompt;
+  }
+
+  /**
+   * Override execute to parse Codex JSON output.
+   * Wraps the onStdout/onStdoutSegments callbacks to parse JSONL events and extract displayable content.
+   * Also forwards raw JSONL messages to onJsonlMessage for subagent tracing.
+   */
+  override execute(
+    prompt: string,
+    files?: AgentFileContext[],
+    options?: AgentExecuteOptions
+  ): AgentExecutionHandle {
+    // Wrap callbacks to parse JSON events
+    const parsedOptions: AgentExecuteOptions = {
+      ...options,
+      onStdout: (options?.onStdout || options?.onStdoutSegments || options?.onJsonlMessage)
+        ? (data: string) => {
+            // Parse raw JSONL lines and forward to onJsonlMessage for subagent tracing
+            if (options?.onJsonlMessage) {
+              for (const line of data.split('\n')) {
+                const trimmed = line.trim();
+                if (trimmed && trimmed.startsWith('{')) {
+                  try {
+                    const parsed = JSON.parse(trimmed);
+                    options.onJsonlMessage(parsed);
+                  } catch {
+                    // Not valid JSON, skip
+                  }
+                }
+              }
+            }
+
+            // Process for display events
+            const events = parseCodexOutputToEvents(data);
+            if (events.length > 0) {
+              // Call TUI-native segments callback if provided
+              if (options?.onStdoutSegments) {
+                const segments = processAgentEventsToSegments(events);
+                if (segments.length > 0) {
+                  options.onStdoutSegments(segments);
+                }
+              }
+              // Also call legacy string callback if provided
+              if (options?.onStdout) {
+                const parsed = processAgentEvents(events);
+                if (parsed.length > 0) {
+                  options.onStdout(parsed);
+                }
+              }
+            }
+          }
+        : undefined,
+    };
+
+    return super.execute(prompt, files, parsedOptions);
   }
 
   override async validateSetup(_answers: Record<string, unknown>): Promise<string | null> {

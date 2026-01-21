@@ -6,6 +6,7 @@
 
 import { spawn } from 'node:child_process';
 import { BaseAgentPlugin, findCommandPath } from '../base.js';
+import { processAgentEvents, processAgentEventsToSegments, type AgentDisplayEvent } from '../output-formatting.js';
 import type {
   AgentPluginMeta,
   AgentPluginFactory,
@@ -13,7 +14,98 @@ import type {
   AgentExecuteOptions,
   AgentSetupQuestion,
   AgentDetectResult,
+  AgentExecutionHandle,
 } from '../types.js';
+
+/**
+ * Extract a string error message from various error formats.
+ * Handles: string, { message: string }, or other objects.
+ */
+function extractErrorMessage(err: unknown): string {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object') {
+    const obj = err as Record<string, unknown>;
+    if (typeof obj.message === 'string') return obj.message;
+    if (typeof obj.error === 'string') return obj.error;
+    // Fallback: stringify the object
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return 'Unknown error';
+    }
+  }
+  return String(err);
+}
+
+/**
+ * Parse Gemini JSON line into standardized display events.
+ * Returns AgentDisplayEvent[] - the shared processAgentEvents decides what to show.
+ *
+ * Gemini CLI event types (when using --output-format stream-json):
+ * - "init": Session initialization (skip)
+ * - "message" with role "user": Echo of input prompt (skip!)
+ * - "message" with role "assistant": LLM response text (extract!)
+ * - "tool_call": Tool being called
+ * - "tool_result": Tool execution result
+ * - "result": Stats/completion (skip)
+ * - "error": Error from Gemini
+ */
+function parseGeminiJsonLine(jsonLine: string): AgentDisplayEvent[] {
+  if (!jsonLine || jsonLine.length === 0) return [];
+
+  try {
+    const event = JSON.parse(jsonLine);
+    const events: AgentDisplayEvent[] = [];
+
+    // Handle Gemini CLI event types
+    if (event.type === 'message') {
+      // IMPORTANT: Skip user messages - they echo the input prompt
+      if (event.role === 'user') {
+        return [];
+      }
+      // Extract assistant response
+      if (event.role === 'assistant' && event.content) {
+        events.push({ type: 'text', content: event.content });
+      }
+    } else if (event.type === 'tool_call' || event.type === 'function_call') {
+      // Tool call event
+      const toolName = event.name || event.function?.name || 'unknown';
+      const toolInput = event.arguments || event.args || event.input;
+      events.push({ type: 'tool_use', name: toolName, input: toolInput });
+    } else if (event.type === 'tool_result' || event.type === 'function_result') {
+      // Tool result
+      const isError = event.is_error === true || event.error !== undefined;
+      if (isError) {
+        const errMsg = extractErrorMessage(event.error);
+        events.push({ type: 'error', message: errMsg });
+      }
+      events.push({ type: 'tool_result' });
+    } else if (event.type === 'error') {
+      // Error event
+      const errorMsg = extractErrorMessage(event.error) || extractErrorMessage(event.message) || 'Unknown error';
+      events.push({ type: 'error', message: errorMsg });
+    }
+    // Skip: init, result (stats), and other non-content events
+
+    return events;
+  } catch {
+    // Not valid JSON - skip silently (e.g., "YOLO mode is enabled" text)
+    return [];
+  }
+}
+
+/**
+ * Parse Gemini JSON stream output into display events.
+ */
+function parseGeminiOutputToEvents(data: string): AgentDisplayEvent[] {
+  const allEvents: AgentDisplayEvent[] = [];
+  for (const line of data.split('\n')) {
+    const events = parseGeminiJsonLine(line.trim());
+    allEvents.push(...events);
+  }
+  return allEvents;
+}
 
 /**
  * Gemini CLI agent plugin implementation.
@@ -168,7 +260,7 @@ export class GeminiAgentPlugin extends BaseAgentPlugin {
   protected buildArgs(
     _prompt: string,
     _files?: AgentFileContext[],
-    options?: AgentExecuteOptions
+    _options?: AgentExecuteOptions
   ): string[] {
     const args: string[] = [];
 
@@ -176,10 +268,9 @@ export class GeminiAgentPlugin extends BaseAgentPlugin {
     // Windows shell interpretation issues with special characters.
     // Gemini CLI reads from stdin when -p is not provided.
 
-    // JSONL streaming output
-    if (options?.subagentTracing) {
-      args.push('--output-format', 'stream-json');
-    }
+    // Always use stream-json format for output parsing
+    // This gives us structured events (text, tool_use, etc.) that we can format nicely
+    args.push('--output-format', 'stream-json');
 
     // Model selection
     if (this.model) {
@@ -205,6 +296,61 @@ export class GeminiAgentPlugin extends BaseAgentPlugin {
     _options?: AgentExecuteOptions
   ): string {
     return prompt;
+  }
+
+  /**
+   * Override execute to parse Gemini JSON output.
+   * Wraps the onStdout/onStdoutSegments callbacks to parse JSONL events and extract displayable content.
+   * Also forwards raw JSONL messages to onJsonlMessage for subagent tracing.
+   */
+  override execute(
+    prompt: string,
+    files?: AgentFileContext[],
+    options?: AgentExecuteOptions
+  ): AgentExecutionHandle {
+    // Wrap callbacks to parse JSON events
+    const parsedOptions: AgentExecuteOptions = {
+      ...options,
+      onStdout: (options?.onStdout || options?.onStdoutSegments || options?.onJsonlMessage)
+        ? (data: string) => {
+            // Parse raw JSONL lines and forward to onJsonlMessage for subagent tracing
+            if (options?.onJsonlMessage) {
+              for (const line of data.split('\n')) {
+                const trimmed = line.trim();
+                if (trimmed && trimmed.startsWith('{')) {
+                  try {
+                    const parsed = JSON.parse(trimmed);
+                    options.onJsonlMessage(parsed);
+                  } catch {
+                    // Not valid JSON, skip
+                  }
+                }
+              }
+            }
+
+            // Process for display events
+            const events = parseGeminiOutputToEvents(data);
+            if (events.length > 0) {
+              // Call TUI-native segments callback if provided
+              if (options?.onStdoutSegments) {
+                const segments = processAgentEventsToSegments(events);
+                if (segments.length > 0) {
+                  options.onStdoutSegments(segments);
+                }
+              }
+              // Also call legacy string callback if provided
+              if (options?.onStdout) {
+                const parsed = processAgentEvents(events);
+                if (parsed.length > 0) {
+                  options.onStdout(parsed);
+                }
+              }
+            }
+          }
+        : undefined,
+    };
+
+    return super.execute(prompt, files, parsedOptions);
   }
 
   override async validateSetup(answers: Record<string, unknown>): Promise<string | null> {

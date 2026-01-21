@@ -369,6 +369,9 @@ export async function executeResumeCommand(args: string[]): Promise<void> {
 
   const summary = getSessionSummary(resumedState);
 
+  // Set session ID on config for use in iteration log filenames
+  config.sessionId = summary.sessionId;
+
   console.log(`Session:    ${summary.sessionId.slice(0, 8)}...`);
   console.log(`Agent:      ${summary.agentPlugin}`);
   console.log(`Tracker:    ${summary.trackerPlugin}`);

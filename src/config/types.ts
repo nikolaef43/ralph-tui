@@ -276,6 +276,9 @@ export interface RalphConfig {
 
   /** Custom prompt template path (resolved) */
   promptTemplate?: string;
+
+  /** Session ID for log file naming and tracking */
+  sessionId?: string;
 }
 
 /**

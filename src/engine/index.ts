@@ -1051,6 +1051,7 @@ export class ExecutionEngine {
 
       await saveIterationLog(this.config.cwd, result, agentResult.stdout, agentResult.stderr ?? this.state.currentStderr, {
         config: this.config,
+        sessionId: this.config.sessionId,
         subagentTrace,
         agentSwitches: this.currentIterationAgentSwitches.length > 0 ? [...this.currentIterationAgentSwitches] : undefined,
         completionSummary,

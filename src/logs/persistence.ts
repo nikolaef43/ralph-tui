@@ -46,12 +46,48 @@ const STDERR_DIVIDER = '\n--- STDERR ---\n';
 const SUBAGENT_TRACE_DIVIDER = '\n--- SUBAGENT TRACE ---\n';
 
 /**
- * Generate log filename for an iteration.
- * Format: iteration-{N}-{taskId}.log
+ * Format a timestamp for use in filenames.
+ * Input: ISO 8601 timestamp (e.g., '2024-01-15T10:30:45.123Z')
+ * Output: filesystem-safe timestamp (e.g., '2024-01-15_10-30-45')
  */
-export function generateLogFilename(iteration: number, taskId: string): string {
+function formatTimestampForFilename(isoTimestamp: string): string {
+  // Parse ISO timestamp and format as YYYY-MM-DD_HH-mm-ss
+  const date = new Date(isoTimestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+}
+
+/**
+ * Generate log filename for an iteration.
+ * New format: {sessionId}_{timestamp}_{taskId}.log
+ * Example: a1b2c3d4_2024-01-15_10-30-45_BEAD-001.log
+ *
+ * Falls back to legacy format if sessionId or startedAt not provided:
+ * Legacy format: iteration-{N}-{taskId}.log
+ */
+export function generateLogFilename(
+  iteration: number,
+  taskId: string,
+  sessionId?: string,
+  startedAt?: string
+): string {
   // Sanitize task ID for filesystem safety (replace / with -)
   const safeTaskId = taskId.replace(/[/\\:*?"<>|]/g, '-');
+
+  // Use new format if sessionId and startedAt are available
+  if (sessionId && startedAt) {
+    // Use first 8 chars of session ID for brevity
+    const shortSessionId = sessionId.slice(0, 8);
+    const timestamp = formatTimestampForFilename(startedAt);
+    return `${shortSessionId}_${timestamp}_${safeTaskId}.log`;
+  }
+
+  // Legacy fallback format
   const paddedIteration = String(iteration).padStart(3, '0');
   return `iteration-${paddedIteration}-${safeTaskId}.log`;
 }
@@ -484,6 +520,9 @@ export interface SaveIterationLogOptions {
   /** Ralph config (for output directory, agent plugin, model, epicId) */
   config?: Partial<RalphConfig>;
 
+  /** Session ID for unique log file naming */
+  sessionId?: string;
+
   /** Subagent trace data to persist (optional) */
   subagentTrace?: SubagentTrace;
 
@@ -522,6 +561,7 @@ export async function saveIterationLog(
   // Old signature: saveIterationLog(cwd, result, stdout, stderr, config)
   // New signature: saveIterationLog(cwd, result, stdout, stderr, options)
   let config: Partial<RalphConfig> | undefined;
+  let sessionId: string | undefined;
   let subagentTrace: SubagentTrace | undefined;
   let agentSwitches: AgentSwitchEntry[] | undefined;
   let completionSummary: string | undefined;
@@ -534,13 +574,15 @@ export async function saveIterationLog(
     'config' in options ||
     'subagentTrace' in options ||
     'sandboxConfig' in options ||
-    'resolvedSandboxMode' in options
+    'resolvedSandboxMode' in options ||
+    'sessionId' in options
   );
 
   if (isOptionsObject) {
     // New options object
     const saveOptions = options as SaveIterationLogOptions;
     config = saveOptions.config;
+    sessionId = saveOptions.sessionId;
     subagentTrace = saveOptions.subagentTrace;
     agentSwitches = saveOptions.agentSwitches;
     completionSummary = saveOptions.completionSummary;
@@ -563,7 +605,8 @@ export async function saveIterationLog(
     sandboxConfig,
     resolvedSandboxMode,
   });
-  const filename = generateLogFilename(result.iteration, result.task.id);
+  // Generate filename with new format if sessionId available, else legacy format
+  const filename = generateLogFilename(result.iteration, result.task.id, sessionId, result.startedAt);
   const filePath = join(getIterationsDir(cwd, outputDir), filename);
 
   // Build file content with structured header and raw output
@@ -658,10 +701,14 @@ export async function listIterationLogs(
     return [];
   }
 
-  // Filter to .log files that match our pattern
+  // Filter to .log files that match either legacy or new format:
+  // Legacy: iteration-{NNN}-{taskId}.log
+  // New: {sessionId}_{timestamp}_{taskId}.log (e.g., a1b2c3d4_2024-01-15_10-30-45_BEAD-001.log)
+  const legacyPattern = /^iteration-\d+-.*\.log$/;
+  const newPattern = /^[a-f0-9]{8}_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_.*\.log$/;
   const logFiles = files
-    .filter((f) => f.startsWith('iteration-') && f.endsWith('.log'))
-    .sort(); // Sort by filename (which includes iteration number)
+    .filter((f) => legacyPattern.test(f) || newPattern.test(f))
+    .sort(); // Sort by filename (for initial ordering, will be re-sorted by timestamp below)
 
   const summaries: IterationLogSummary[] = [];
 
@@ -701,6 +748,15 @@ export async function listIterationLogs(
       filePath,
     });
   }
+
+  // Sort by startedAt timestamp (chronologically oldest first)
+  // This ensures logs[logs.length - 1] returns the most recent log,
+  // even when iteration numbers reset between sessions.
+  summaries.sort((a, b) => {
+    const timeA = new Date(a.startedAt).getTime();
+    const timeB = new Date(b.startedAt).getTime();
+    return timeA - timeB;
+  });
 
   // Apply pagination
   let result = summaries;
@@ -763,8 +819,13 @@ export async function cleanupIterationLogs(
 ): Promise<LogCleanupResult> {
   const allSummaries = await listIterationLogs(cwd);
 
-  // Sort by iteration number descending (most recent first)
-  const sorted = [...allSummaries].sort((a, b) => b.iteration - a.iteration);
+  // listIterationLogs returns summaries sorted chronologically (oldest first).
+  // Sort by timestamp descending (most recent first) to keep the newest logs.
+  const sorted = [...allSummaries].sort((a, b) => {
+    const timeA = new Date(a.startedAt).getTime();
+    const timeB = new Date(b.startedAt).getTime();
+    return timeB - timeA; // Descending (newest first)
+  });
 
   const toKeep = sorted.slice(0, options.keep);
   const toDelete = sorted.slice(options.keep);

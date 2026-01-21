@@ -1684,6 +1684,9 @@ export async function executeRunCommand(args: string[]): Promise<void> {
     });
   }
 
+  // Set session ID on config for use in iteration log filenames
+  config.sessionId = session.id;
+
   console.log(`Session: ${session.id}`);
   console.log(`Agent: ${config.agent.plugin}`);
   console.log(`Tracker: ${config.tracker.plugin}`);

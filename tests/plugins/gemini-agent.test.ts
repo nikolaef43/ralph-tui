@@ -265,19 +265,23 @@ describe('GeminiAgentPlugin', () => {
       expect(args).not.toContain('--yolo');
     });
 
-    test('includes --output-format stream-json when tracing enabled', () => {
-      const args = testablePlugin.testBuildArgs('test prompt', undefined, {
+    test('always includes --output-format stream-json for output parsing', () => {
+      // stream-json is always enabled for proper output parsing
+      const argsWithTracing = testablePlugin.testBuildArgs('test prompt', undefined, {
         subagentTracing: true,
       });
-      expect(args).toContain('--output-format');
-      expect(args).toContain('stream-json');
-    });
+      expect(argsWithTracing).toContain('--output-format');
+      expect(argsWithTracing).toContain('stream-json');
 
-    test('excludes --output-format when tracing disabled', () => {
-      const args = testablePlugin.testBuildArgs('test prompt', undefined, {
+      const argsWithoutTracing = testablePlugin.testBuildArgs('test prompt', undefined, {
         subagentTracing: false,
       });
-      expect(args).not.toContain('--output-format');
+      expect(argsWithoutTracing).toContain('--output-format');
+      expect(argsWithoutTracing).toContain('stream-json');
+
+      const argsNoOptions = testablePlugin.testBuildArgs('test prompt');
+      expect(argsNoOptions).toContain('--output-format');
+      expect(argsNoOptions).toContain('stream-json');
     });
 
     test('includes -m when model is configured', async () => {
