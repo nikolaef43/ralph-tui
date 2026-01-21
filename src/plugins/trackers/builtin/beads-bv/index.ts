@@ -6,8 +6,8 @@
  */
 
 import { spawn } from 'node:child_process';
-import { access, constants } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { access } from 'node:fs/promises';
+import { readFileSync, constants } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BeadsTrackerPlugin } from '../beads/index.js';

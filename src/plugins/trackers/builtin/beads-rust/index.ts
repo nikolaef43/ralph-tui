@@ -7,7 +7,7 @@
 import { spawn } from 'node:child_process';
 import { constants, readFileSync } from 'node:fs';
 import { access, readFile } from 'node:fs/promises';
-import { join, dirname, resolve } from 'node:path';
+import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BaseTrackerPlugin } from '../../base.js';
 import type {
@@ -353,11 +353,10 @@ export class BeadsRustTrackerPlugin extends BaseTrackerPlugin {
     let tasks = tasksJson.map(brTaskToTask);
 
     // Filter by parent (br list doesn't support --parent)
+    // Always apply filter when parentId is set - empty childIds means no matching tasks
     if (parentId) {
       const childIds = await this.getChildIds(parentId);
-      if (childIds.size > 0) {
-        tasks = tasks.filter((t) => childIds.has(t.id));
-      }
+      tasks = tasks.filter((t) => childIds.has(t.id));
     }
 
     // Apply remaining filters (excluding parentId which we handled above)
@@ -533,11 +532,10 @@ export class BeadsRustTrackerPlugin extends BaseTrackerPlugin {
     let tasks = tasksJson.map(brTaskToTask);
 
     // Filter by parent (br ready doesn't support --parent)
+    // Always apply filter when parentId is set - empty childIds means no matching tasks
     if (parentId) {
       const childIds = await this.getChildIds(parentId);
-      if (childIds.size > 0) {
-        tasks = tasks.filter((t) => childIds.has(t.id));
-      }
+      tasks = tasks.filter((t) => childIds.has(t.id));
     }
 
     // Exclude specific task IDs (used by engine for skipped/failed tasks)
@@ -671,7 +669,16 @@ export class BeadsRustTrackerPlugin extends BaseTrackerPlugin {
         return null;
       }
 
-      const fullPath = prdPath.startsWith('/') ? prdPath : resolve(this.workingDir, prdPath);
+      // Always resolve against workingDir to prevent path traversal attacks
+      const resolvedPath = resolve(this.workingDir, prdPath);
+
+      // Security check: ensure the path is inside workingDir
+      const relativePath = relative(this.workingDir, resolvedPath);
+      if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+        return null;
+      }
+
+      const fullPath = resolvedPath;
 
       let content: string;
       try {

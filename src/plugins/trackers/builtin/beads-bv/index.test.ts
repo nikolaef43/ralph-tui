@@ -43,7 +43,6 @@ mock.module('node:fs', () => ({
 mock.module('node:fs/promises', () => ({
   access: async () => {},
   readFile: async () => '',
-  constants: { R_OK: 4 },
 }));
 
 const { BeadsBvTrackerPlugin } = await import('./index.js');

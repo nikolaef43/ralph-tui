@@ -140,7 +140,7 @@ br show <id> --json | jq '.dependents'  # Get children of epic
 When you create a task with `--parent <epic-id>`, a parent-child dependency is created. The epic's `dependents` field lists all children:
 
 ```bash
-br show <epic-id> --json | jq '.dependents[] | select(.dep_type == "parent-child")'
+br show <epic-id> --json | jq '.dependents[] | select(.dependency_type == "parent-child")'
 ```
 
 ## Session Completion
@@ -149,7 +149,6 @@ When ending a work session, use the `/land-the-plane` skill for a complete check
 
 **Quick version:** Commit, push, and provide hand-off context. Work is NOT complete until `git push` succeeds.
 
-````markdown
 ## UBS Quick Reference for AI Agents
 
 UBS stands for "Ultimate Bug Scanner": **The AI Coding Agent's Secret Weapon: Flagging Likely Bugs for Fixing Early On**
@@ -195,4 +194,3 @@ Parse: `file:line:col` → location | 💡 → how to fix | Exit 0/1 → pass/fa
 - ❌ Ignore findings → ✅ Investigate each
 - ❌ Full scan per edit → ✅ Scope to file
 - ❌ Fix symptom (`if (x) { x.y }`) → ✅ Root cause (`x?.y`)
-````
