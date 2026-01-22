@@ -98,7 +98,11 @@ export const BEADS_TEMPLATE = `{{!-- Full PRD for project context (agent studies
 2. Study \`.ralph-tui/progress.md\` to understand overall status, implementation progress, and learnings including codebase patterns and gotchas
 3. Implement the requirements (stay on current branch)
 4. Run your project's quality checks (typecheck, lint, etc.)
-5. Commit: \`feat: {{taskId}} - {{taskTitle}}\`
+{{#if config.autoCommit}}
+5. Do NOT create git commits. Changes will be committed automatically by the engine after task completion.
+{{else}}
+5. Do NOT create git commits. Leave all changes uncommitted for manual review.
+{{/if}}
 6. Close the bead: \`bd close {{taskId}} --db {{beadsDbPath}} --reason "Brief description"\`
 7. Document learnings (see below)
 8. Signal completion
@@ -192,7 +196,11 @@ Completing this task will unblock: {{blocks}}
 2. Study \`.ralph-tui/progress.md\` to understand overall status, implementation progress, and learnings including codebase patterns and gotchas
 3. Implement the requirements (stay on current branch)
 4. Run your project's quality checks (typecheck, lint, etc.)
-5. Commit: \`feat: {{taskId}} - {{taskTitle}}\`
+{{#if config.autoCommit}}
+5. Do NOT create git commits. Changes will be committed automatically by the engine after task completion.
+{{else}}
+5. Do NOT create git commits. Leave all changes uncommitted for manual review.
+{{/if}}
 6. Close the bead: \`bd close {{taskId}} --db {{beadsDbPath}} --reason "Brief description"\`
 7. Document learnings (see below)
 8. Signal completion
@@ -277,7 +285,11 @@ export const JSON_TEMPLATE = `{{!-- Full PRD for project context (agent studies 
 2. Study \`.ralph-tui/progress.md\` to understand overall status, implementation progress, and learnings including codebase patterns and gotchas
 3. Implement this single story following acceptance criteria
 4. Run quality checks: typecheck, lint, etc.
-5. Commit with message: \`feat: {{taskId}} - {{taskTitle}}\`
+{{#if config.autoCommit}}
+5. Do NOT create git commits. Changes will be committed automatically by the engine after task completion.
+{{else}}
+5. Do NOT create git commits. Leave all changes uncommitted for manual review.
+{{/if}}
 6. Document learnings (see below)
 7. Signal completion
 
