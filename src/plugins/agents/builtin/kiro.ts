@@ -43,6 +43,7 @@ export class KiroAgentPlugin extends BaseAgentPlugin {
 
   private trustAllTools = true;
   private agent?: string;
+  private model?: string;
   protected override defaultTimeout = 0;
 
   override async initialize(config: Record<string, unknown>): Promise<void> {
@@ -54,6 +55,10 @@ export class KiroAgentPlugin extends BaseAgentPlugin {
 
     if (typeof config.agent === 'string' && config.agent.length > 0) {
       this.agent = config.agent;
+    }
+
+    if (typeof config.model === 'string' && config.model.length > 0) {
+      this.model = config.model;
     }
 
     if (typeof config.timeout === 'number' && config.timeout > 0) {
@@ -161,6 +166,21 @@ export class KiroAgentPlugin extends BaseAgentPlugin {
         required: false,
         help: 'Specific Kiro agent to use (leave empty for default)',
       },
+      {
+        id: 'model',
+        prompt: 'Model to use:',
+        type: 'select',
+        default: '',
+        required: false,
+        choices: [
+          { value: '', label: 'Auto', description: 'Intelligent model routing (recommended)' },
+          { value: 'claude-sonnet4', label: 'Claude Sonnet 4.0', description: 'Direct Sonnet 4.0 access' },
+          { value: 'claude-sonnet4.5', label: 'Claude Sonnet 4.5', description: 'Best for complex agents and coding' },
+          { value: 'claude-haiku4.5', label: 'Claude Haiku 4.5', description: 'Fast and cost-effective' },
+          { value: 'claude-opus4.5', label: 'Claude Opus 4.5', description: 'Maximum intelligence (Pro+ only)' },
+        ],
+        help: 'Kiro model to use (see kiro.dev/docs/cli/chat/model-selection)',
+      },
     ];
   }
 
@@ -182,6 +202,11 @@ export class KiroAgentPlugin extends BaseAgentPlugin {
     // Agent selection
     if (this.agent) {
       args.push('--agent', this.agent);
+    }
+
+    // Model selection
+    if (this.model) {
+      args.push('--model', this.model);
     }
 
     // Note: Prompt is passed via stdin (see getStdinInput) to avoid
@@ -207,8 +232,11 @@ export class KiroAgentPlugin extends BaseAgentPlugin {
     return null;
   }
 
-  override validateModel(_model: string): string | null {
-    // Kiro doesn't expose model selection via CLI
+  override validateModel(model: string): string | null {
+    const validModels = ['auto', 'claude-sonnet4', 'claude-sonnet4.5', 'claude-haiku4.5', 'claude-opus4.5'];
+    if (model && !validModels.includes(model)) {
+      return `Invalid model. Must be one of: ${validModels.join(', ')}`;
+    }
     return null;
   }
 }

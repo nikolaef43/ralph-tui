@@ -108,6 +108,11 @@ describe('KiroAgentPlugin', () => {
       expect(await plugin.isReady()).toBe(true);
     });
 
+    test('accepts model config', async () => {
+      await plugin.initialize({ model: 'claude-sonnet4.5' });
+      expect(await plugin.isReady()).toBe(true);
+    });
+
     test('ignores non-boolean trustAllTools', async () => {
       await plugin.initialize({ trustAllTools: 'yes' });
       expect(await plugin.isReady()).toBe(true);
@@ -128,6 +133,16 @@ describe('KiroAgentPlugin', () => {
       expect(await plugin.isReady()).toBe(true);
     });
 
+    test('ignores non-string model', async () => {
+      await plugin.initialize({ model: 123 });
+      expect(await plugin.isReady()).toBe(true);
+    });
+
+    test('ignores empty model string', async () => {
+      await plugin.initialize({ model: '' });
+      expect(await plugin.isReady()).toBe(true);
+    });
+
     test('ignores zero timeout', async () => {
       await plugin.initialize({ timeout: 0 });
       expect(await plugin.isReady()).toBe(true);
@@ -135,15 +150,19 @@ describe('KiroAgentPlugin', () => {
   });
 
   describe('validateModel', () => {
-    test('accepts any value (Kiro does not expose model selection)', () => {
+    test('accepts valid Kiro models', () => {
       expect(plugin.validateModel('')).toBeNull();
-      expect(plugin.validateModel('anything')).toBeNull();
+      expect(plugin.validateModel('auto')).toBeNull();
+      expect(plugin.validateModel('claude-sonnet4')).toBeNull();
+      expect(plugin.validateModel('claude-sonnet4.5')).toBeNull();
+      expect(plugin.validateModel('claude-haiku4.5')).toBeNull();
+      expect(plugin.validateModel('claude-opus4.5')).toBeNull();
     });
 
-    test('accepts any model string', () => {
-      expect(plugin.validateModel('some-model')).toBeNull();
-      expect(plugin.validateModel('gpt-4')).toBeNull();
-      expect(plugin.validateModel('claude-3')).toBeNull();
+    test('rejects invalid model names', () => {
+      expect(plugin.validateModel('gpt-4')).toContain('Invalid model');
+      expect(plugin.validateModel('claude-3')).toContain('Invalid model');
+      expect(plugin.validateModel('sonnet')).toContain('Invalid model');
     });
   });
 
@@ -191,6 +210,15 @@ describe('KiroAgentPlugin', () => {
       const agentQuestion = questions.find(q => q.id === 'agent');
       expect(agentQuestion?.help).toBeDefined();
       expect(agentQuestion?.help?.length).toBeGreaterThan(0);
+    });
+
+    test('includes model question with choices', () => {
+      const questions = plugin.getSetupQuestions();
+      const modelQuestion = questions.find(q => q.id === 'model');
+      expect(modelQuestion).toBeDefined();
+      expect(modelQuestion?.type).toBe('select');
+      expect(modelQuestion?.choices).toBeDefined();
+      expect(modelQuestion?.choices?.length).toBeGreaterThan(0);
     });
   });
 
@@ -268,6 +296,21 @@ describe('KiroAgentPlugin', () => {
     test('excludes --agent when not configured', () => {
       const args = testablePlugin.testBuildArgs('test prompt');
       expect(args).not.toContain('--agent');
+    });
+
+    test('includes --model when model is configured', async () => {
+      await testablePlugin.dispose();
+      testablePlugin = new TestableKiroPlugin();
+      await testablePlugin.initialize({ model: 'claude-sonnet4.5' });
+
+      const args = testablePlugin.testBuildArgs('test prompt');
+      expect(args).toContain('--model');
+      expect(args).toContain('claude-sonnet4.5');
+    });
+
+    test('excludes --model when not configured', () => {
+      const args = testablePlugin.testBuildArgs('test prompt');
+      expect(args).not.toContain('--model');
     });
 
     test('has args in correct order: chat, --no-interactive, then options', () => {
