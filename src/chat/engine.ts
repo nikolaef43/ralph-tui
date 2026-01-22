@@ -78,7 +78,7 @@ export class ChatEngine {
       agent: config.agent,
       systemPrompt: config.systemPrompt,
       maxHistoryMessages: config.maxHistoryMessages ?? 50,
-      timeout: config.timeout ?? 180000, // 3 minutes default
+      timeout: config.timeout ?? 0, // 0 = no timeout by default
       cwd: config.cwd ?? process.cwd(),
       agentOptions: config.agentOptions ?? {},
     };
@@ -389,7 +389,7 @@ export function createPrdChatEngine(
     agent,
     systemPrompt,
     cwd: options.cwd,
-    timeout: options.timeout ?? 180000,
+    timeout: options.timeout ?? 0,
   });
 }
 
@@ -404,7 +404,7 @@ export function createTaskChatEngine(
     agent,
     systemPrompt: TASK_SYSTEM_PROMPT,
     cwd: options.cwd,
-    timeout: options.timeout ?? 180000,
+    timeout: options.timeout ?? 0,
   });
 }
 
