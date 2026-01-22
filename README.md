@@ -434,6 +434,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#testing) for detailed testing documentatio
 - Writing new tests
 - Coverage requirements
 
+### Pull Request Requirements
+
+PRs must meet these requirements before being merged:
+- **>50% test coverage** on new/changed lines (enforced by Codecov)
+- **Documentation updates** for any new or changed features
+- All CI checks passing (typecheck, lint, tests)
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#pull-request-guidelines) for full PR guidelines.
+
 ### Project Structure
 
 ```

@@ -139,9 +139,10 @@ docs: update README with configuration examples
 ### Pull Request Guidelines
 
 1. **One feature per PR** - Keep changes focused
-2. **Update documentation** if adding features
-3. **Ensure CI passes** - typecheck and lint must succeed
-4. **Describe your changes** in the PR description
+2. **Update documentation** if adding features - any new or changed functionality must include documentation updates
+3. **Ensure CI passes** - typecheck, lint, and tests must succeed
+4. **Meet test coverage requirements** - PRs must have >50% test coverage on new and changed lines (enforced by Codecov)
+5. **Describe your changes** in the PR description
 
 ## Adding New Features
 
@@ -321,10 +322,13 @@ test('should call dependency', () => {
 
 ### Coverage Requirements
 
-- Aim for **80%+ line coverage** on new code
+- **PRs must have >50% test coverage on new/changed lines** (enforced by Codecov patch check)
+- Aim for **80%+ line coverage** on new code when possible
 - Critical paths (engine, plugins) should have higher coverage
 - Run `bun test --coverage` to check coverage locally
 - Coverage reports are generated in CI and uploaded to Codecov
+
+> **Note:** If your PR adds new functionality, you must include tests that cover at least 50% of the new/changed lines. PRs that fail the Codecov patch check will not be merged.
 
 ### Manual Testing
 
