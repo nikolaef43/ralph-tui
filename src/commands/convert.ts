@@ -11,6 +11,7 @@ import {
   parsedPrdToGeneratedPrd,
   convertToPrdJson,
 } from '../prd/index.js';
+import { loadStoredConfig } from '../config/index.js';
 import {
   promptText,
   promptBoolean,
@@ -132,7 +133,7 @@ Options:
   --output, -o <path>    Output file path (default: ./prd.json, only for json format)
   --branch, -b <name>    Git branch name (prompts if not provided)
   --labels, -l <labels>  Labels to apply (comma-separated, beads format only)
-                         Default: "ralph" is always included for beads format
+                         Default: uses labels from config.toml [trackerOptions].labels
   --force, -f            Overwrite existing files without prompting
   --verbose, -v          Show detailed parsing output
   --help, -h             Show this help message
@@ -152,7 +153,7 @@ Description:
     - Creates an epic bead for the feature
     - Creates child beads for each user story
     - Sets up dependencies based on story order or explicit deps
-    - Applies the 'ralph' label to all created beads
+    - Applies configured labels from config.toml or --labels flag
     - Runs bd sync after creation
     - Displays all created bead IDs
 
@@ -237,9 +238,8 @@ async function convertToBeads(
 ): Promise<BeadsConversionResult> {
   const storyIds: string[] = [];
 
-  // Ensure 'ralph' label is always included
-  const allLabels = ['ralph', ...labels.filter((l) => l !== 'ralph')];
-  const labelsStr = allLabels.join(',');
+  // Use provided labels (from CLI or config)
+  const labelsStr = labels.length > 0 ? labels.join(',') : '';
 
   // Step 1: Create the epic bead
   printInfo('Creating epic bead...');
@@ -248,10 +248,14 @@ async function convertToBeads(
     '--type', 'epic',
     '--title', parsed.name,
     '--description', parsed.description,
-    '--labels', labelsStr,
     '--priority', '1',
     '--silent',
   ];
+
+  // Only add labels if configured
+  if (labelsStr) {
+    epicArgs.splice(epicArgs.indexOf('--priority'), 0, '--labels', labelsStr);
+  }
 
   // Include PRD link if available
   if (prdPath) {
@@ -296,11 +300,15 @@ async function convertToBeads(
       '--type', 'task',
       '--title', `${story.id}: ${story.title}`,
       '--description', description,
-      '--labels', labelsStr,
       '--priority', String(story.priority),
       '--parent', epicId,
       '--silent',
     ];
+
+    // Only add labels if configured
+    if (labelsStr) {
+      storyArgs.splice(storyArgs.indexOf('--priority'), 0, '--labels', labelsStr);
+    }
 
     // Include PRD link if available
     if (prdPath) {
@@ -570,7 +578,7 @@ async function executeJsonConversion(
  */
 async function executeBeadsConversion(
   parsed: import('../prd/parser.js').ParsedPrd,
-  labels: string[],
+  cliLabels: string[],
   verbose: boolean,
   prdPath?: string
 ): Promise<void> {
@@ -580,6 +588,22 @@ async function executeBeadsConversion(
     printError(`bd command not available: ${stderr}`);
     printInfo('Make sure beads is installed and the bd command is in your PATH');
     process.exit(1);
+  }
+
+  // Determine labels: CLI takes precedence, then config, then no labels
+  let labels = cliLabels;
+  if (labels.length === 0) {
+    // Load labels from config if not provided via CLI
+    const storedConfig = await loadStoredConfig();
+    const configLabels = storedConfig.trackerOptions?.labels;
+    if (typeof configLabels === 'string') {
+      labels = configLabels.split(',').map((l) => l.trim()).filter(Boolean);
+    } else if (Array.isArray(configLabels)) {
+      labels = configLabels
+        .filter((l): l is string => typeof l === 'string')
+        .map((l) => l.trim())
+        .filter(Boolean);
+    }
   }
 
   // Perform the conversion
