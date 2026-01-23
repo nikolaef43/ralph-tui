@@ -7,7 +7,7 @@ import { describe, test, expect, mock, beforeEach } from 'bun:test';
 import { EventEmitter } from 'node:events';
 
 let mockSpawnArgs: Array<{ cmd: string; args: string[]; opts: unknown }> = [];
-let mockSpawnExitCode = 0;
+let mockSpawnExitCode: number | null = 0;
 let mockSpawnStdout = '';
 let mockSpawnStderr = '';
 let mockSpawnError: Error | null = null;
@@ -146,13 +146,11 @@ describe('installViaAddSkill', () => {
 
   test('handles null exit code as failure', async () => {
     mockSpawnStderr = 'some error\n';
-    // Simulate null exit code by using a special value
-    // The code does `code ?? 1` but our mock emits `close` with the value directly
-    // Let's just test exit code 1 which is the fallback
-    mockSpawnExitCode = 1;
+    mockSpawnExitCode = null;
 
     const result = await installViaAddSkill({ agentId: 'claude', global: true });
 
     expect(result.success).toBe(false);
+    expect(result.output).toContain('some error');
   });
 });
