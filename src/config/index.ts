@@ -644,11 +644,12 @@ export async function validateConfig(
   // Validate tracker-specific requirements
   if (
     config.tracker.plugin === 'beads' ||
-    config.tracker.plugin === 'beads-bv'
+    config.tracker.plugin === 'beads-bv' ||
+    config.tracker.plugin === 'beads-rust'
   ) {
     if (!config.epicId) {
       warnings.push(
-        'No epic ID specified for beads tracker; will use current directory'
+        'No epic ID specified for beads tracker; will show interactive epic selection'
       );
     }
   }

@@ -57,7 +57,35 @@ export async function projectConfigExists(cwd: string = process.cwd()): Promise<
 }
 
 /**
- * Detect available tracker plugins
+ * Format a human-readable reason for why a tracker is unavailable.
+ * Provides specific guidance based on what's missing (directory vs CLI).
+ */
+function formatTrackerUnavailableReason(plugin: PluginDetection): string {
+  const error = plugin.error ?? '';
+
+  // Beads directory not found
+  if (error.includes('directory not found')) {
+    return 'No .beads directory found. Run "bd init" or "br init" to create one.';
+  }
+
+  // CLI binary not available
+  if (error.includes('binary not available') || error.includes('not available')) {
+    const cli = plugin.id === 'beads-rust' ? 'br' : 'bd';
+    return `${cli} CLI not found. Install it to use this tracker.`;
+  }
+
+  // Generic fallback
+  if (error) {
+    return error;
+  }
+
+  return `${plugin.description} (not detected)`;
+}
+
+/**
+ * Detect available tracker plugins.
+ * For beads-family trackers, checks for .beads directory and CLI availability.
+ * For other trackers (json), always marks as available.
  */
 async function detectTrackerPlugins(): Promise<PluginDetection[]> {
   const registry = getTrackerRegistry();
@@ -73,14 +101,31 @@ async function detectTrackerPlugins(): Promise<PluginDetection[]> {
     const instance = registry.createInstance(meta.id);
     if (!instance) continue;
 
-    // For trackers, we can't really "detect" without config
-    // So we just list them as available
+    // Initialize with empty config to trigger environment detection.
+    // For beads-family trackers, this checks .beads dir and CLI availability.
+    await instance.initialize({});
+
+    const isReady = await instance.isReady();
+
+    // For trackers with a detect() method (beads-family), get granular error info
+    let error: string | undefined;
+    let version: string | undefined;
+    const instanceAsDetectable = instance as unknown as {
+      detect?: () => Promise<{ error?: string; bdVersion?: string; brVersion?: string }>;
+    };
+    if (!isReady && typeof instanceAsDetectable.detect === 'function') {
+      const detectResult = await instanceAsDetectable.detect();
+      error = detectResult.error;
+      version = detectResult.bdVersion ?? detectResult.brVersion;
+    }
+
     detections.push({
       id: meta.id,
       name: meta.name,
       description: meta.description,
-      available: true,
-      version: meta.version,
+      available: isReady,
+      version: isReady ? meta.version : version,
+      error,
     });
 
     await instance.dispose();
@@ -255,10 +300,12 @@ export async function runSetupWizard(
     // Build choices with availability info
     const trackerChoices = trackerPlugins.map((p) => ({
       value: p.id,
-      label: p.name,
+      label: p.available
+        ? p.name
+        : `${p.name} (unavailable)`,
       description: p.available
         ? p.description
-        : `${p.description} (not available: ${p.error})`,
+        : formatTrackerUnavailableReason(p),
     }));
 
     const selectedTracker = await promptSelect(
@@ -269,6 +316,22 @@ export async function runSetupWizard(
         help: 'Ralph will use this tracker to manage tasks.',
       }
     );
+
+    // Show tip for beads-family trackers
+    const isBeadsTracker = selectedTracker === 'beads' || selectedTracker === 'beads-bv' || selectedTracker === 'beads-rust';
+    if (isBeadsTracker) {
+      const selectedPlugin = trackerPlugins.find((p) => p.id === selectedTracker);
+      if (selectedPlugin?.available) {
+        console.log();
+        printInfo('Beads tracker tip: When running Ralph, specify an epic:');
+        console.log('  ralph-tui run --epic <epic-id>');
+        console.log();
+        printInfo('Or omit --epic to get an interactive epic selection list.');
+        console.log();
+        printInfo('Have a markdown PRD? Convert it to Beads issues:');
+        console.log('  ralph-tui convert --to beads --input ./prd.md');
+      }
+    }
 
     // Collect tracker-specific options
     const trackerOptions = await collectTrackerOptions(selectedTracker);
@@ -456,6 +519,15 @@ export async function runSetupWizard(
       console.log();
       console.log('  Create a PRD and tasks:        ralph-tui create-prd');
       console.log('  Run Ralph on existing tasks:   ralph-tui run --prd <path-to-prd.json>');
+    } else if (selectedTracker === 'beads' || selectedTracker === 'beads-bv' || selectedTracker === 'beads-rust') {
+      printInfo('You can now run Ralph TUI with:');
+      console.log();
+      console.log('  ralph-tui run                  # Interactive epic selection');
+      console.log('  ralph-tui run --epic <id>      # Run with a specific epic');
+      console.log();
+      printInfo('To create issues from a markdown PRD:');
+      console.log();
+      console.log('  ralph-tui convert --to beads --input ./prd.md');
     } else {
       printInfo('You can now run Ralph TUI with:');
       console.log();
